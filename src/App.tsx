@@ -244,27 +244,44 @@ export default function App() {
     try {
       const result: AiChatResult = await executeAgentPrompt(model || selectedModel, prompt, selectedId, code);
       
-      // Update Monaco code
-      if (result.code) {
-        setCode(result.code);
+      const isCodeUpdate = Boolean((result as any).is_code_update && result.code);
+
+      if (isCodeUpdate) {
+        // Update Monaco code
+        if (result.code) {
+          setCode(result.code);
+        }
+
+        // Update Video Player
+        if (result.video_url) {
+          setVideoUrl(result.video_url);
+        }
+
+        setRenderStatus("ready");
+        setRenderProgress(100);
+        setRenderLog("Scene ready");
+      } else {
+        // Natural conversation - no render compilation needed
+        setRenderStatus("idle");
+        setRenderProgress(0);
+        setRenderLog("");
       }
 
-      // Update Video Player
-      if (result.video_url) {
-        setVideoUrl(result.video_url);
-      }
+      const activities = isCodeUpdate
+        ? ([
+            { id: `act-1`, type: "step", label: `Agent reasoning (${model || selectedModel})`, status: "complete" },
+            { id: `act-2`, type: "tool", action: "edit", target: "scene.py", additions: 36, deletions: 8 },
+            { id: `act-3`, type: "step", label: "Compiled scene with Manim Community v0.21", status: "complete", meta: "scene.py" },
+          ] as AgentActivityItem[])
+        : undefined;
 
       const finalMsgs: ChatMessage[] = updatedMsgs.map((m) =>
         m.id === assistantMsgId
           ? {
               ...m,
-              content: result.explanation || `Configured and updated scene for: "${prompt}".\n\nSynchronized mathematical parameters and compiled scene smoothly.`,
+              content: result.explanation || `Replied to: "${prompt}"`,
               isStreaming: false,
-              activities: [
-                { id: `act-1`, type: "step", label: `Agent reasoning (${model || selectedModel})`, status: "complete" },
-                { id: `act-2`, type: "tool", action: "edit", target: "scene.py", additions: 36, deletions: 8 },
-                { id: `act-3`, type: "step", label: "Compiled scene with Manim Community v0.21", status: "complete", meta: "scene.py" },
-              ] as AgentActivityItem[],
+              activities,
             }
           : m
       );
@@ -273,9 +290,6 @@ export default function App() {
       saveProjectChat(selectedId, JSON.stringify(finalMsgs));
 
       setIsGenerating(false);
-      setRenderStatus("ready");
-      setRenderProgress(100);
-      setRenderLog("Scene ready");
     } catch (err: any) {
       setIsGenerating(false);
       setRenderStatus("error");

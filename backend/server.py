@@ -17,30 +17,27 @@ def get_projects_dir() -> Path:
     p.mkdir(parents=True, exist_ok=True)
     return p
 
-SYSTEM_PROMPT = """You are ManimForge AI, an elite Mathematical Animation Engineer specializing in Manim Community Edition v0.21.
-Your task is to generate complete, elegant, and bug-free Python Manim code based on the user's request.
+SYSTEM_PROMPT = """You are ManimForge Assistant, an expert AI Mathematical Animator and Pair Programmer specialized in Manim Community Edition v0.21.
 
-Rules:
-1. Always import manim: `from manim import *`
-2. Create a Scene subclass named `Scene` or descriptive name: `class Scene(Scene):` or `class MyMathScene(Scene):`
-3. Include configurable parameters with comments formatted as:
-   `PARAM_NAME = <number> # @param min=<min> max=<max> step=<step> label="<Label>"`
-4. Prefer `Text("...")` with Unicode symbols (e.g. `x₁`, `θ`, `π`, `ŷ`, `→`) or valid MathTex.
-5. Provide a dark background: `self.camera.background_color = "#11111b"`
-6. Keep animations concise, smooth, and aesthetic with proper pacing (`run_time=1.0`, `self.wait(1)`).
-7. Return your response in Markdown with the Python code block:
-```python
-# your code
-```
-Followed by a brief explanation of the mathematical animation.
+Guidelines:
+1. Natural Conversation:
+   - If the user greets you (e.g. "hi", "xin chào"), asks a general question, discusses math/physics theory, or chats casually, respond naturally, friendly, and concisely in their language (Vietnamese/English). DO NOT generate Python code or scene files for casual conversation.
+2. Animation Requests:
+   - When the user asks to create, visualize, animate, draw, or edit a mathematical scene (e.g. "Vẽ hình tròn...", "Tạo đồ thị sin...", "Mô phỏng trọng lực..."):
+     - Explain your mathematical approach briefly.
+     - Provide the complete, bug-free Python Manim code in a ```python ... ``` block.
+     - Use `from manim import *` and define `class Scene(Scene):` (or descriptive subclass).
+     - Include parameter annotations formatted as: `# @param min=... max=... step=... label="..."`.
+     - Prefer `Text("...")` with clean Unicode symbols (e.g. `x₁`, `θ`, `π`, `ŷ`) or valid MathTex.
+     - Use dark background `self.camera.background_color = "#11111b"`.
 """
 
-def call_llm(prompt: str, current_code: str = "") -> tuple[str, str]:
+def call_llm(prompt: str, current_code: str = "") -> tuple[str | None, str]:
     api_key = os.environ.get("OPENROUTER_API_KEY", "")
     if not api_key:
         api_key = "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"
 
-    user_msg = f"User Request: {prompt}\n\nCurrent scene.py code:\n```python\n{current_code}\n```" if current_code else f"User Request: {prompt}"
+    user_msg = f"User: {prompt}\n\n[Current scene.py code:\n```python\n{current_code}\n```]" if current_code and len(current_code.strip()) > 0 else f"User: {prompt}"
 
     payload = {
         "model": "deepseek/deepseek-chat",
@@ -68,21 +65,27 @@ def call_llm(prompt: str, current_code: str = "") -> tuple[str, str]:
             res_data = json.loads(response.read().decode("utf-8"))
             content = res_data["choices"][0]["message"]["content"]
             
+            # Check if there is a python code block
             code_match = re.search(r"```python\s*([\s\S]*?)\s*```", content)
             if code_match:
-                code = code_match.group(1)
+                code = code_match.group(1).strip()
+                explanation = re.sub(r"```python[\s\S]*?```", "", content).strip()
+                return code, explanation
             else:
-                code = content
-            
-            explanation = re.sub(r"```python[\s\S]*?```", "", content).strip()
-            return code, explanation
+                # Pure conversational response
+                return None, content.strip()
     except Exception as e:
         print(f"LLM API Error: {e}", file=sys.stderr)
-        return generate_fallback_scene(prompt), f"Generated math visualization for '{prompt}'."
+        p = prompt.lower()
+        if any(w in p for w in ["vẽ", "tạo", "mô phỏng", "đồ thị", "draw", "animate", "create", "plot", "sin", "cos", "wave"]):
+            fallback_code = generate_fallback_scene(prompt)
+            return fallback_code, f"Đã khởi tạo hoạt cảnh toán học cho: '{prompt}'."
+        else:
+            return None, f"Chào bạn! Tôi là trợ lý ManimForge. Bạn có thể yêu cầu tôi mô phỏng hoặc vẽ bất kỳ hoạt cảnh toán học/vật lý nào bằng Manim Community v0.21."
 
 def generate_fallback_scene(prompt: str) -> str:
     p = prompt.lower()
-    if "sin" in p or "cos" in p or "sóng" in p or "wave" in p or "fourier" in p:
+    if "sin" in p or "cos" in p or "sóng" in p or "wave" in p:
         return '''from manim import *
 import numpy as np
 
@@ -113,27 +116,6 @@ class Scene(Scene):
 
         self.play(Create(sin_curve), Write(sin_label), run_time=SPEED)
         self.play(Create(cos_curve), Write(cos_label), run_time=SPEED)
-        self.wait(1.5)
-'''
-    elif "tròn" in p or "vuông" in p or "circle" in p or "square" in p or "morph" in p:
-        return '''from manim import *
-
-# Parameters
-RADIUS = 1.8 # @param min=1.0 max=3.0 step=0.2 label="Radius"
-RUN_TIME = 1.2 # @param min=0.5 max=3.0 step=0.5 label="Morph Duration"
-
-class Scene(Scene):
-    def construct(self):
-        self.camera.background_color = "#11111b"
-        title = Text("Circle to Square Morph", font_size=28, color="#cdd6f4").to_edge(UP, buff=0.6)
-        self.play(Write(title), run_time=0.8)
-
-        circle = Circle(radius=RADIUS, color="#89b4fa", fill_opacity=0.3)
-        square = Square(side_length=RADIUS*1.6, color="#a6e3a1", fill_opacity=0.3)
-
-        self.play(Create(circle), run_time=0.8)
-        self.wait(0.5)
-        self.play(Transform(circle, square), run_time=RUN_TIME)
         self.wait(1.5)
 '''
     else:
@@ -273,15 +255,27 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
 
             proj_dir = get_projects_dir() / proj_id
             code, explanation = call_llm(prompt, current_code)
-            success, video_url, msg = render_scene(proj_dir, code)
 
-            self.send_json({
-                "success": success,
-                "code": code,
-                "explanation": explanation,
-                "video_url": video_url,
-                "message": msg,
-            })
+            if code:
+                success, video_url, msg = render_scene(proj_dir, code)
+                self.send_json({
+                    "is_code_update": True,
+                    "success": success,
+                    "code": code,
+                    "explanation": explanation,
+                    "video_url": video_url,
+                    "message": msg,
+                })
+            else:
+                # Conversational response
+                self.send_json({
+                    "is_code_update": False,
+                    "success": True,
+                    "code": None,
+                    "explanation": explanation,
+                    "video_url": None,
+                    "message": "Chat response",
+                })
             return
 
         if path == "/api/render":
