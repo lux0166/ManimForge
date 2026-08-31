@@ -22,10 +22,9 @@ import {
 } from "@/lib/tauri-bridge";
 
 const INITIAL_MANIM_CODE = `# Neural Network: Forward Pass & Backprop
-import manim as m
-import numpy as np
+from manim import *
 
-# Tokens & Hyperparameters
+# Hyperparameters
 NUM_LAYERS = 4 # @param min=2 max=8 step=1 label="Layers"
 LEARNING_RATE = 0.05 # @param min=0.01 max=0.5 step=0.01 label="Learning Rate"
 ANIMATION_SPEED = 1.0 # @param min=0.5 max=3.0 step=0.5 label="Speed Multiplier"
@@ -41,49 +40,49 @@ COLOR_OUTPUT = "#a6e3a1"
 COLOR_TARGET = "#f38ba8"
 COLOR_TEXT = "#cdd6f4"
 
-class NeuralNetworkLearning(m.Scene):
+class NeuralNetworkLearning(Scene):
     def construct(self):
         # Background
         self.camera.background_color = "#11111b"
 
         # Title
-        title = m.Text(TITLE_TEXT, font_size=28, color=COLOR_TEXT)
-        title.to_edge(m.UP, buff=0.6)
-        self.play(m.Write(title), run_time=1)
+        title = Text(TITLE_TEXT, font_size=28, color=COLOR_TEXT)
+        title.to_edge(UP, buff=0.6)
+        self.play(Write(title), run_time=1)
 
         # Input Nodes
-        node_x1 = m.Circle(radius=0.4, color=COLOR_INPUT, fill_opacity=0.2).shift(m.LEFT * 3 + m.UP * 1.2)
-        node_x2 = m.Circle(radius=0.4, color=COLOR_INPUT, fill_opacity=0.2).shift(m.LEFT * 3 + m.DOWN * 1.2)
-        label_x1 = m.MathTex(r"x_1 = 0.8", font_size=24, color=COLOR_TEXT).next_to(node_x1, m.LEFT)
-        label_x2 = m.MathTex(r"x_2 = 0.5", font_size=24, color=COLOR_TEXT).next_to(node_x2, m.LEFT)
+        node_x1 = Circle(radius=0.4, color=COLOR_INPUT, fill_opacity=0.2).shift(LEFT * 3 + UP * 1.2)
+        node_x2 = Circle(radius=0.4, color=COLOR_INPUT, fill_opacity=0.2).shift(LEFT * 3 + DOWN * 1.2)
+        label_x1 = Text("x₁ = 0.8", font_size=20, color=COLOR_TEXT).next_to(node_x1, LEFT)
+        label_x2 = Text("x₂ = 0.5", font_size=20, color=COLOR_TEXT).next_to(node_x2, LEFT)
 
         # Output Node
-        node_y = m.Circle(radius=0.45, color=COLOR_OUTPUT, fill_opacity=0.2).shift(m.RIGHT * 2)
-        label_y_name = m.Text("Output", font_size=18, color=COLOR_TEXT).next_to(node_y, m.UP)
-        label_y_val = m.MathTex(r"\hat{y} = 0.67", font_size=22, color=COLOR_OUTPUT).move_to(node_y)
+        node_y = Circle(radius=0.45, color=COLOR_OUTPUT, fill_opacity=0.2).shift(RIGHT * 2)
+        label_y_name = Text("Output", font_size=16, color=COLOR_TEXT).next_to(node_y, UP)
+        label_y_val = Text("ŷ = 0.67", font_size=20, color=COLOR_OUTPUT).move_to(node_y)
 
         # Connections (Weights)
-        line_1 = m.Line(node_x1.get_right(), node_y.get_left(), color=COLOR_WEIGHT, stroke_width=STROKE_WIDTH)
-        line_2 = m.Line(node_x2.get_right(), node_y.get_left(), color=COLOR_WEIGHT, stroke_width=STROKE_WIDTH)
-        w1_label = m.MathTex(r"w_1 = 0.4", font_size=18, color=COLOR_WEIGHT).next_to(line_1.get_center(), m.UP * 0.5)
-        w2_label = m.MathTex(r"w_2 = 0.7", font_size=18, color=COLOR_WEIGHT).next_to(line_2.get_center(), m.DOWN * 0.5)
+        line_1 = Line(node_x1.get_right(), node_y.get_left(), color=COLOR_WEIGHT, stroke_width=STROKE_WIDTH)
+        line_2 = Line(node_x2.get_right(), node_y.get_left(), color=COLOR_WEIGHT, stroke_width=STROKE_WIDTH)
+        w1_label = Text("w₁ = 0.4", font_size=16, color=COLOR_WEIGHT).next_to(line_1.get_center(), UP * 0.4)
+        w2_label = Text("w₂ = 0.7", font_size=16, color=COLOR_WEIGHT).next_to(line_2.get_center(), DOWN * 0.4)
 
         # Animations
         self.play(
-            m.Create(node_x1), m.Create(node_x2),
-            m.Write(label_x1), m.Write(label_x2),
-            run_time=1.2
+            Create(node_x1), Create(node_x2),
+            Write(label_x1), Write(label_x2),
+            run_time=ANIMATION_SPEED
         )
         self.play(
-            m.Create(line_1), m.Create(line_2),
-            m.Write(w1_label), m.Write(w2_label),
-            run_time=1.2
+            Create(line_1), Create(line_2),
+            Write(w1_label), Write(w2_label),
+            run_time=ANIMATION_SPEED
         )
         self.play(
-            m.Create(node_y), m.Write(label_y_name), m.Write(label_y_val),
-            run_time=1.2
+            Create(node_y), Write(label_y_name), Write(label_y_val),
+            run_time=ANIMATION_SPEED
         )
-        self.wait(2)
+        self.wait(1.5)
 `;
 
 export default function App() {
