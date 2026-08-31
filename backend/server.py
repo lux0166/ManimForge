@@ -44,13 +44,47 @@ AGENT_MODEL_MAP = {
     "ollama": "qwen/qwen-2.5-coder-32b-instruct",
 }
 
+def detect_system_agents():
+    agent_defs = [
+        {"id": "agy", "name": "Antigravity CLI", "command": "agy", "description": "DeepMind Autonomous Coding Agent"},
+        {"id": "opencode", "name": "OpenCode CLI", "command": "opencode", "description": "Open-source terminal coding agent"},
+        {"id": "cline", "name": "Cline CLI", "command": "cline", "description": "Autonomous CLI developer"},
+        {"id": "claude", "name": "Claude Code CLI", "command": "claude", "description": "Anthropic Claude terminal assistant"},
+        {"id": "cursor", "name": "Cursor CLI", "command": "cursor", "description": "Cursor terminal agent"},
+        {"id": "codex", "name": "Codex CLI", "command": "codex", "description": "OpenAI Codex command line agent"},
+        {"id": "ollama", "name": "Ollama CLI", "command": "ollama", "description": "Local offline LLM runner"},
+    ]
+    
+    results = []
+    for a in agent_defs:
+        cmd = a["command"]
+        path = shutil.which(cmd)
+        if not path:
+            local_app = os.path.expandvars(r'%LOCALAPPDATA%\agy\bin\agy.exe') if cmd == 'agy' else None
+            npm_cmd = os.path.expandvars(rf'%APPDATA%\npm\{cmd}.cmd')
+            npm_exe = os.path.expandvars(rf'%APPDATA%\npm\{cmd}.exe')
+            if local_app and os.path.exists(local_app):
+                path = local_app
+            elif os.path.exists(npm_cmd):
+                path = npm_cmd
+            elif os.path.exists(npm_exe):
+                path = npm_exe
+        
+        results.append({
+            "id": a["id"],
+            "name": a["name"],
+            "command": a["command"],
+            "installed": bool(path),
+            "path": path,
+            "description": a["description"]
+        })
+    return results
+
 def resolve_model(agent_id: str, prompt: str) -> tuple[str, str]:
-    # Check if prompt starts with /model <name>
     model_match = re.match(r"^/model\s+([^\s]+)\s*(.*)", prompt, re.DOTALL | re.IGNORECASE)
     if model_match:
         custom_model = model_match.group(1).strip()
         remaining_prompt = model_match.group(2).strip()
-        # Clean custom model name
         if "/" not in custom_model:
             if "deepseek" in custom_model:
                 custom_model = "deepseek/deepseek-chat"
@@ -227,6 +261,10 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
+
+        if path == "/api/agents":
+            self.send_json(detect_system_agents())
+            return
 
         if path == "/api/projects":
             proj_dir = get_projects_dir()

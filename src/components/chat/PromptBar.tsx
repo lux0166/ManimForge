@@ -378,7 +378,7 @@ export function PromptBar({
                 <span className="size-1.5 rounded-full shrink-0" style={{ backgroundColor: m.installed ? "#34d399" : "#71717a" }} />
                 <span className="min-w-0 flex-1 truncate font-mono text-[12px] font-medium text-ink">{m.command}</span>
                 <span className="shrink-0 text-[10px] text-ink-3 font-mono">
-                  {m.installed ? "Ready" : "Missing"}
+                  {m.installed ? "Local CLI" : "Cloud AI"}
                 </span>
                 <span className={`shrink-0 text-ink ${m.id === currentModel.id ? "" : "invisible"}`}>
                   <Icon size={12} strokeWidth={2.5}><path d="M20 6L9 17l-5-5" /></Icon>

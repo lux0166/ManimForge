@@ -82,14 +82,23 @@ export async function fetchEnvironment(): Promise<EnvironmentStatus> {
 }
 
 export async function fetchAvailableAgents(): Promise<AgentCliInfo[]> {
+  try {
+    const res = await fetch(`${SERVER_URL}/api/agents`);
+    const data = await res.json();
+    if (Array.isArray(data) && data.length > 0) {
+      return data;
+    }
+  } catch (e) {
+    console.warn("fetchAvailableAgents error:", e);
+  }
   return [
     { id: "agy", name: "Antigravity CLI", command: "agy", installed: true, path: "agy", description: "DeepMind Autonomous Coding Agent" },
     { id: "opencode", name: "OpenCode CLI", command: "opencode", installed: true, path: "opencode", description: "Open-source terminal coding agent" },
     { id: "cline", name: "Cline CLI", command: "cline", installed: true, path: "cline", description: "Autonomous CLI developer" },
-    { id: "claude", name: "Claude Code CLI", command: "claude", installed: true, path: "claude", description: "Anthropic Claude terminal assistant" },
-    { id: "cursor", name: "Cursor CLI", command: "cursor", installed: true, path: "cursor", description: "Cursor terminal agent" },
-    { id: "codex", name: "Codex CLI", command: "codex", installed: true, path: "codex", description: "OpenAI Codex command line agent" },
-    { id: "ollama", name: "Ollama CLI", command: "ollama", installed: true, path: "ollama", description: "Local offline LLM runner" },
+    { id: "claude", name: "Claude Code CLI", command: "claude", installed: false, path: null, description: "Anthropic Claude terminal assistant" },
+    { id: "cursor", name: "Cursor CLI", command: "cursor", installed: false, path: null, description: "Cursor terminal agent" },
+    { id: "codex", name: "Codex CLI", command: "codex", installed: false, path: null, description: "OpenAI Codex command line agent" },
+    { id: "ollama", name: "Ollama CLI", command: "ollama", installed: false, path: null, description: "Local offline LLM runner" },
   ];
 }
 
