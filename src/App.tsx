@@ -224,22 +224,14 @@ export default function App() {
     const streamingAssistantMsg: ChatMessage = {
       id: assistantMsgId,
       sender: "assistant",
-      content: "Reasoning and synthesizing mathematical animation...",
+      content: "Đang suy nghĩ...",
       isStreaming: true,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      activities: [
-        { id: `act-${Date.now()}-1`, type: "step", label: `Invoking ${model || selectedModel} AI Engine...`, status: "active" },
-        { id: `act-${Date.now()}-2`, type: "step", label: "Formulating Manim Community v0.21 geometry", status: "pending" },
-        { id: `act-${Date.now()}-3`, type: "step", label: "Compiling 60fps scene video", status: "pending" },
-      ] as AgentActivityItem[],
     };
 
     const updatedMsgs = [...messages, userMsg, streamingAssistantMsg];
     setMessages(updatedMsgs);
     setIsGenerating(true);
-    setRenderStatus("rendering");
-    setRenderProgress(30);
-    setRenderLog(`AI synthesizing: "${prompt}" with Manim Community v0.21...`);
 
     try {
       const result: AiChatResult = await executeAgentPrompt(model || selectedModel, prompt, selectedId, code);
@@ -247,48 +239,33 @@ export default function App() {
       const isCodeUpdate = Boolean((result as any).is_code_update && result.code);
 
       if (isCodeUpdate) {
-        // Update Monaco code
         if (result.code) {
           setCode(result.code);
         }
-
-        // Update Video Player
         if (result.video_url) {
           setVideoUrl(result.video_url);
         }
-
         setRenderStatus("ready");
         setRenderProgress(100);
         setRenderLog("Scene ready");
       } else {
-        // Natural conversation - no render compilation needed
         setRenderStatus("idle");
         setRenderProgress(0);
         setRenderLog("");
       }
 
-      const activities = isCodeUpdate
-        ? ([
-            { id: `act-1`, type: "step", label: `Agent reasoning (${model || selectedModel})`, status: "complete" },
-            { id: `act-2`, type: "tool", action: "edit", target: "scene.py", additions: 36, deletions: 8 },
-            { id: `act-3`, type: "step", label: "Compiled scene with Manim Community v0.21", status: "complete", meta: "scene.py" },
-          ] as AgentActivityItem[])
-        : undefined;
-
       const finalMsgs: ChatMessage[] = updatedMsgs.map((m) =>
         m.id === assistantMsgId
           ? {
               ...m,
-              content: result.explanation || `Replied to: "${prompt}"`,
+              content: result.explanation || `Đã phản hồi câu hỏi của bạn.`,
               isStreaming: false,
-              activities,
             }
           : m
       );
 
       setMessages(finalMsgs);
       saveProjectChat(selectedId, JSON.stringify(finalMsgs));
-
       setIsGenerating(false);
     } catch (err: any) {
       setIsGenerating(false);
