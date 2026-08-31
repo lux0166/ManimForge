@@ -272,13 +272,22 @@ class Scene(Scene):
         self.wait(1)
 '''
 
+def get_system_unicode_font() -> str:
+    if sys.platform == "win32":
+        return "Segoe UI"
+    elif sys.platform == "darwin":
+        return "Helvetica Neue"
+    else:
+        return "DejaVu Sans"
+
 def patch_vietnamese_fonts(code: str) -> str:
+    font_name = get_system_unicode_font()
     def repl(match):
         inner = match.group(0)
         if "font=" not in inner and any(ord(c) > 127 for c in inner):
-            return inner[:-1] + ', font="Segoe UI")'
+            return inner[:-1] + f', font="{font_name}")'
         return inner
-    return re.sub(r'Text\([^)]+\)', repl, code)
+    return re.sub(r'Text\([^)]+\)', repl, code)]+\)', repl, code)
 
 def render_scene(proj_dir: Path, code: str) -> tuple[bool, str, str]:
     proj_dir.mkdir(parents=True, exist_ok=True)

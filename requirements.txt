@@ -1,0 +1,3 @@
+# ManimForge Studio Python Dependencies
+manim>=0.18.0
+numpy>=1.24.0
