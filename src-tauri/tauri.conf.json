@@ -19,11 +19,15 @@
         "minHeight": 600,
         "center": true,
         "decorations": true,
-        "transparent": false
+        "transparent": false,
+        "label": "main"
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "capabilities": [
+        "default"
+      ]
     }
   },
   "bundle": {

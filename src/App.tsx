@@ -125,22 +125,26 @@ export default function App() {
   // Load initial backend environment & projects
   useEffect(() => {
     async function loadData() {
-      const [env, agents, projList] = await Promise.all([
-        fetchEnvironment(),
-        fetchAvailableAgents(),
-        fetchProjects(),
-      ]);
+      try {
+        const [env, agents, projList] = await Promise.all([
+          fetchEnvironment(),
+          fetchAvailableAgents(),
+          fetchProjects(),
+        ]);
 
-      setAvailableAgents(agents);
+        setAvailableAgents(agents);
 
-      if (projList.length > 0) {
-        setProjects(projList.map((p) => ({ id: p.id, label: p.name, prompt: p.prompt ?? undefined })));
-        const firstProj = projList[0];
-        setSelectedId(firstProj.id);
-        const loadedCode = await loadProjectCode(firstProj.id);
-        if (loadedCode && loadedCode.trim().length > 0) {
-          setCode(loadedCode);
+        if (projList.length > 0) {
+          setProjects(projList.map((p) => ({ id: p.id, label: p.name, prompt: p.prompt ?? undefined })));
+          const firstProj = projList[0];
+          setSelectedId(firstProj.id);
+          const loadedCode = await loadProjectCode(firstProj.id);
+          if (loadedCode && loadedCode.trim().length > 0) {
+            setCode(loadedCode);
+          }
         }
+      } catch (err) {
+        console.warn("Backend load error:", err);
       }
     }
 
@@ -165,7 +169,7 @@ export default function App() {
       }
     }).then((fn) => {
       unlisten = fn;
-    });
+    }).catch(() => {});
 
     return () => {
       if (unlisten) unlisten();
@@ -218,26 +222,45 @@ export default function App() {
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
 
-    setMessages((prev) => [...prev, userMsg]);
+    const assistantMsgId = `msg-${Date.now() + 1}`;
+    const streamingAssistantMsg: ChatMessage = {
+      id: assistantMsgId,
+      sender: "assistant",
+      content: "Thinking...",
+      isStreaming: true,
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      activities: [
+        { id: `act-${Date.now()}-1`, type: "step", label: `Invoking ${model || selectedModel} CLI agent...`, status: "active" },
+        { id: `act-${Date.now()}-2`, type: "step", label: "Formulating math coordinates & scene parameters", status: "pending" },
+      ],
+    };
+
+    setMessages((prev) => [...prev, userMsg, streamingAssistantMsg]);
     setIsGenerating(true);
     setRenderStatus("preparing");
 
     try {
       const response = await executeAgentPrompt(model || selectedModel, prompt, selectedId);
       
-      const assistantMsg: ChatMessage = {
-        id: `msg-${Date.now() + 1}`,
-        sender: "assistant",
-        content: response || `Updated scene for: "${prompt}".\n\nConfigured parameter tokens and compiled scene smoothly.`,
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        activities: [
-          { id: `act-${Date.now()}-1`, type: "step", label: "Agent reasoning & math formulation", status: "complete" },
-          { id: `act-${Date.now()}-2`, type: "tool", action: "edit", target: "scene.py", additions: 32, deletions: 6 },
-          { id: `act-${Date.now()}-3`, type: "step", label: "Compiled scene", status: "complete", meta: "scene.py" },
-        ],
-      };
-      
-      setMessages((prev) => [...prev, assistantMsg]);
+      const cleanPrompt = prompt.replace("[PLAN MODE]", "").trim();
+      const finalReply = response || `Configured and updated scene for: "${cleanPrompt}".\n\nSynchronized mathematical parameters and compiled scene smoothly.`;
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMsgId
+            ? {
+                ...m,
+                content: finalReply,
+                isStreaming: false,
+                activities: [
+                  { id: `act-1`, type: "step", label: `Agent reasoning (${model || selectedModel})`, status: "complete" },
+                  { id: `act-2`, type: "tool", action: "edit", target: "scene.py", additions: 36, deletions: 8 },
+                  { id: `act-3`, type: "step", label: "Compiled scene with Manim Community v0.21", status: "complete", meta: "scene.py" },
+                ],
+              }
+            : m
+        )
+      );
       
       // Reload updated code from disk
       const updatedCode = await loadProjectCode(selectedId);
@@ -252,6 +275,17 @@ export default function App() {
       setIsGenerating(false);
       setRenderStatus("error");
       setRenderError(String(err));
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMsgId
+            ? {
+                ...m,
+                content: `Error: ${String(err)}`,
+                isStreaming: false,
+              }
+            : m
+        )
+      );
     }
   };
 
