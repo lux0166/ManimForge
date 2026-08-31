@@ -167,30 +167,15 @@ export function PreviewPanel({
 
         {/* Tab 1: Video Canvas */}
         <TabsContent value="preview" className="relative flex flex-1 flex-col items-center justify-center p-3 overflow-hidden m-0 bg-black">
-          {status === "preparing" || status === "rendering" ? (
-            <div className="flex flex-col items-center justify-center space-y-3 max-w-sm text-center p-5 rounded-xl bg-[#121214] border border-[#27272a] z-10 shadow-2xl">
-              <div className="flex items-center gap-2">
-                <Loader variant="dots" size={14} />
-                <span className="text-[10.5px] font-semibold uppercase tracking-widest text-white">
-                  COMPILING MANIM SCENE
-                </span>
-              </div>
-              <div className="space-y-2 text-left text-xs text-white">
-                <div className="flex items-center gap-2 text-emerald-400">
-                  <CheckCircle2 className="size-3.5" />
-                  <span>Python 3.14 runtime ready</span>
-                </div>
-                <div className="flex items-center gap-2 text-emerald-400">
-                  <CheckCircle2 className="size-3.5" />
-                  <span>Manim Community v0.21 verified</span>
-                </div>
-                <div className="flex items-center gap-2 text-white">
-                  <Loader variant="spinner" size={12} className="text-white" />
-                  <span>Rendering frames with FFmpeg...</span>
-                </div>
-              </div>
+          {/* Subtle Live Compiling Overlay Badge without blocking the screen */}
+          {(status === "preparing" || status === "rendering") && (
+            <div className="absolute top-4 right-4 z-30 flex items-center gap-2 rounded-full bg-[#121214]/90 border border-white/20 px-3 py-1 text-xs text-white backdrop-blur-md shadow-lg animate-pulse">
+              <Loader variant="spinner" size={12} className="text-white" />
+              <span className="font-mono text-[11px] font-medium">Rendering Manim 60fps...</span>
             </div>
-          ) : videoUrl ? (
+          )}
+
+          {videoUrl ? (
             <div className="relative flex size-full items-center justify-center z-10">
               <video
                 ref={videoRef}
