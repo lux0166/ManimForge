@@ -69,23 +69,28 @@ Every frame must be clean, elegant, with ZERO overlapping text, ZERO colliding a
      cos_label = Text("y = cos(x)", font_size=18, color=PATH_COLOR).next_to(sin_label, DOWN, buff=0.25, aligned_edge=LEFT)
      ```
 
-3. **CLASS DEFINITION & SCENE STRUCTURE**:
-   - Always define `class Scene(Scene):` or `class <DescriptiveName>(Scene):` (inheriting from Scene or ThreeDScene).
-   - Always start with `from manim import *` and `import numpy as np`.
-   - Dark background: `self.camera.background_color = "#11111b"`.
-
-4. **INTERACTIVE PARAMETER ANNOTATIONS (# @param)**:
-   - Expose key parameters at the top of the file:
+3. **CRITICAL TYPOGRAPHY & ESCAPING RULES (PREVENT 'extbf' OR ESCAPE BUGS)**:
+   - ⚠️ NEVER use LaTeX formatting like `\textbf{...}` inside `Text(...)`!
+   - To make bold or italic text, ALWAYS use native Manim parameters:
      ```python
-     # Parameters for interactive sliders
-     LENGTH = 2.5        # @param min=1.0 max=4.0 step=0.1 label="Length (m)"
-     AMPLITUDE = 1.5     # @param min=0.5 max=3.0 step=0.1 label="Amplitude"
-     FREQUENCY = 1.0     # @param min=0.2 max=3.0 step=0.2 label="Frequency"
-     ANIM_SPEED = 1.0    # @param min=0.5 max=2.0 step=0.1 label="Speed"
+     title = Text("Neural Network Optimization", weight=BOLD, font_size=28, color="#cdd6f4").to_edge(UP, buff=0.5)
      ```
+   - If writing math with backslashes, ALWAYS use raw string literals `r"..."` (e.g. `r"\theta"`, `r"\tau"`, `r"\alpha"`). Without `r"..."`, Python interprets `\t` as a Tab character and strips `\t` into `extbf` or corrupted text!
 
-5. **ROBUST LATEX-FREE TYPOGRAPHY**:
-   - ALWAYS use `Text("...", font_size=...)` with clean Unicode characters (theta, lambda, pi, x_1) to ensure 100% render reliability on all machines.
+4. **NEURAL NETWORK VISUALIZATION STANDARDS**:
+   - When asked for a Neural Network / Deep Learning visualization:
+     - Construct distinct layers (e.g. Input: 3 nodes, Hidden 1: 4 nodes, Hidden 2: 4 nodes, Output: 2 nodes).
+     - Connect neurons with synaptic weight lines: `Line(n1.get_center(), n2.get_center(), stroke_opacity=0.25, stroke_width=1.5, color="#71717a")`.
+     - Animate the **Forward Pass**: Flash pulses of light (`#89b4fa`) moving from input to output.
+     - Animate **Backpropagation / Loss Gradient**: Reverse pulses (`#f38ba8`) flowing backwards as weights adjust.
+     - Add clean layer labels below each column: `Text("Input", font_size=16)`, `Text("Hidden", font_size=16)`, `Text("Output", font_size=16)`.
+
+5. **VIETNAMESE & UNICODE TYPOGRAPHY (ZERO MISSING GLYPHS / NO TOFU BOXES)**:
+   - When writing Vietnamese text in `Text(...)` (e.g. `Lan truyền thuận`, `Đồ thị`, `Tầng ẩn`), ALWAYS specify `font="Segoe UI"` or `font="Arial"`:
+     ```python
+     title = Text("Lan truyền thuận (Forward Propagation)", font="Segoe UI", font_size=26, color="#cdd6f4").to_edge(UP, buff=0.4)
+     ```
+   - ⚠️ NEVER omit the font for Vietnamese text because Windows default Serif font lacks composite diacritics (`ề`, `ậ`, `ắ`, `ỗ`, `ự`), which causes white rectangle tofu glyphs and detached accents!
 
 6. **COLOR HARMONY (Catppuccin Palette)**:
    - Sapphire Blue: `"#89b4fa"`
@@ -226,7 +231,7 @@ SPEED = 1.0 # @param min=0.5 max=2.0 step=0.5 label="Speed"
 class Scene(Scene):
     def construct(self):
         self.camera.background_color = "#11111b"
-        title = Text("Sine & Cosine Waves", font_size=28, color="#cdd6f4").to_edge(UP, buff=0.6)
+        title = Text("Sine & Cosine Waves", font="Segoe UI", font_size=28, color="#cdd6f4").to_edge(UP, buff=0.6)
         self.play(Write(title), run_time=0.8)
 
         axes = Axes(
@@ -240,8 +245,8 @@ class Scene(Scene):
 
         sin_curve = axes.plot(lambda x: AMPLITUDE * np.sin(FREQUENCY * x), color="#89b4fa")
         cos_curve = axes.plot(lambda x: AMPLITUDE * np.cos(FREQUENCY * x), color="#f38ba8")
-        sin_label = Text("y = sin(x)", font_size=18, color="#89b4fa").next_to(axes, DOWN).shift(LEFT * 1.5)
-        cos_label = Text("y = cos(x)", font_size=18, color="#f38ba8").next_to(axes, DOWN).shift(RIGHT * 1.5)
+        sin_label = Text("y = sin(x)", font="Segoe UI", font_size=18, color="#89b4fa").next_to(axes, DOWN).shift(LEFT * 1.5)
+        cos_label = Text("y = cos(x)", font="Segoe UI", font_size=18, color="#f38ba8").next_to(axes, DOWN).shift(RIGHT * 1.5)
 
         self.play(Create(sin_curve), Write(sin_label), run_time=SPEED)
         self.play(Create(cos_curve), Write(cos_label), run_time=SPEED)
@@ -256,7 +261,7 @@ SCALE = 1.2 # @param min=0.5 max=2.5 step=0.1 label="Scale"
 class Scene(Scene):
     def construct(self):
         self.camera.background_color = "#11111b"
-        title = Text("{prompt[:30]}", font_size=26, color="#cdd6f4").to_edge(UP, buff=0.6)
+        title = Text("{prompt[:30]}", font="Segoe UI", font_size=26, color="#cdd6f4").to_edge(UP, buff=0.6)
         self.play(Write(title), run_time=0.8)
 
         c = Circle(radius=1.5 * SCALE, color="#89b4fa", fill_opacity=0.2)
@@ -267,12 +272,21 @@ class Scene(Scene):
         self.wait(1)
 '''
 
+def patch_vietnamese_fonts(code: str) -> str:
+    def repl(match):
+        inner = match.group(0)
+        if "font=" not in inner and any(ord(c) > 127 for c in inner):
+            return inner[:-1] + ', font="Segoe UI")'
+        return inner
+    return re.sub(r'Text\([^)]+\)', repl, code)
+
 def render_scene(proj_dir: Path, code: str) -> tuple[bool, str, str]:
     proj_dir.mkdir(parents=True, exist_ok=True)
+    code = patch_vietnamese_fonts(code)
     scene_file = proj_dir / "scene.py"
     scene_file.write_text(code, encoding="utf-8")
 
-    class_match = re.search(r"class\s+([A-Za-z0-9_]+)\s*\(\s*Scene\s*\):", code)
+    class_match = re.search(r"class\s+([A-Za-z0-9_]+)\s*\(\s*(?:Scene|ThreeDScene|MovingCameraScene)\s*\):", code)
     scene_class = class_match.group(1) if class_match else "Scene"
 
     media_dir = proj_dir / "media"
@@ -470,7 +484,7 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
             else:
                 code = scene_file.read_text(encoding="utf-8") if scene_file.exists() else ""
             
-            scene_classes = re.findall(r"class\s+([A-Za-z0-9_]+)\s*\(\s*Scene\s*\):", code)
+            scene_classes = re.findall(r"class\s+([A-Za-z0-9_]+)\s*\(\s*(?:Scene|ThreeDScene|MovingCameraScene)\s*\):", code)
             if not scene_classes:
                 scene_classes = ["Scene"]
             
@@ -531,7 +545,7 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
             if code:
                 scene_file.write_text(code, encoding="utf-8")
             
-            class_match = re.search(r"class\s+([A-Za-z0-9_]+)\s*\(\s*Scene\s*\):", code or (scene_file.read_text(encoding="utf-8") if scene_file.exists() else ""))
+            class_match = re.search(r"class\s+([A-Za-z0-9_]+)\s*\(\s*(?:Scene|ThreeDScene|MovingCameraScene)\s*\):", code or (scene_file.read_text(encoding="utf-8") if scene_file.exists() else ""))
             scene_class = class_match.group(1) if class_match else "Scene"
             
             cmd = [
