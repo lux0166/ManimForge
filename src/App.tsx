@@ -18,6 +18,7 @@ import {
   loadProjectChat,
   renderManimScene,
   executeAgentPrompt,
+  streamAgentPrompt,
   exportMasterVideo,
   deleteProject,
   renameProject,
@@ -264,69 +265,95 @@ export default function App() {
     const streamingAssistantMsg: ChatMessage = {
       id: assistantMsgId,
       sender: "assistant",
-      content: "Đang suy nghĩ...",
+      content: "",
       isStreaming: true,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
 
-    const updatedMsgs = [...messages, userMsg, streamingAssistantMsg];
-    setMessages(updatedMsgs);
+    const baseMsgs = [...messages, userMsg];
+    setMessages([...baseMsgs, streamingAssistantMsg]);
     setIsGenerating(true);
 
-    try {
-      const result: AiChatResult = await executeAgentPrompt(model || selectedModel, prompt, selectedId, code);
-      
-      const isCodeUpdate = Boolean((result as any).is_code_update && result.code);
+    let latestAccumulated = "";
 
-      if (isCodeUpdate && result.code) {
-        const generatedCode = result.code;
-        const generatedVideoUrl = result.video_url;
+    await streamAgentPrompt(
+      model || selectedModel,
+      prompt,
+      selectedId,
+      code,
+      {
+        onToken: (_token, accumulated) => {
+          latestAccumulated = accumulated;
+          // Extract text explanation vs code block
+          const codeMatch = accumulated.match(/```python\s*([\s\S]*?)(?:```|$)/);
+          const cleanExplanation = accumulated.replace(/```python[\s\S]*?(?:```|$)/, "").trim();
 
-        // Progressive typewriter stream into Monaco Code Editor
-        streamCodeIntoEditor(generatedCode, () => {
-          saveProjectCode(selectedId, generatedCode);
-          if (generatedVideoUrl) {
-            setVideoUrl(generatedVideoUrl);
+          // Live stream into chat bubble
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId
+                ? { ...m, content: cleanExplanation || "Đang viết code Manim..." }
+                : m
+            )
+          );
+
+          // If code is streaming, live stream directly into Monaco editor in real time!
+          if (codeMatch && codeMatch[1]) {
+            setCode(codeMatch[1]);
           }
-          setRenderStatus("ready");
-          setRenderProgress(100);
-          setRenderLog("Scene ready");
-        });
-      } else {
-        setRenderStatus("idle");
-        setRenderProgress(0);
-        setRenderLog("");
+        },
+        onRenderStart: (finalCode) => {
+          setCode(finalCode);
+          setRenderStatus("rendering");
+          setRenderProgress(40);
+          setRenderLog("Compiling scene.py with Manim Community v0.21...");
+        },
+        onDone: (result) => {
+          setIsGenerating(false);
+          const isCode = Boolean(result.is_code_update && result.code);
+
+          if (isCode && result.code) {
+            setCode(result.code);
+            saveProjectCode(selectedId, result.code);
+            if (result.video_url) {
+              setVideoUrl(result.video_url);
+            }
+            setRenderStatus("ready");
+            setRenderProgress(100);
+            setRenderLog("Scene ready");
+          } else {
+            setRenderStatus("idle");
+            setRenderProgress(0);
+          }
+
+          const cleanExp = result.explanation || latestAccumulated.replace(/```python[\s\S]*?(?:```|$)/, "").trim() || "Đã hoàn thành.";
+          const finalMsgs = [...baseMsgs, {
+            id: assistantMsgId,
+            sender: "assistant" as const,
+            content: cleanExp,
+            isStreaming: false,
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          }];
+
+          setMessages(finalMsgs);
+          saveProjectChat(selectedId, JSON.stringify(finalMsgs));
+        },
+        onError: (err) => {
+          setIsGenerating(false);
+          setRenderStatus("error");
+          setRenderError(String(err));
+          const errMsgs = [...baseMsgs, {
+            id: assistantMsgId,
+            sender: "assistant" as const,
+            content: `Lỗi kết nối: ${String(err)}`,
+            isStreaming: false,
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          }];
+          setMessages(errMsgs);
+          saveProjectChat(selectedId, JSON.stringify(errMsgs));
+        }
       }
-
-      const finalMsgs: ChatMessage[] = updatedMsgs.map((m) =>
-        m.id === assistantMsgId
-          ? {
-              ...m,
-              content: result.explanation || `Đã phản hồi câu hỏi của bạn.`,
-              isStreaming: false,
-            }
-          : m
-      );
-
-      setMessages(finalMsgs);
-      saveProjectChat(selectedId, JSON.stringify(finalMsgs));
-      setIsGenerating(false);
-    } catch (err: any) {
-      setIsGenerating(false);
-      setRenderStatus("error");
-      setRenderError(String(err));
-      const errorMsgs = updatedMsgs.map((m) =>
-        m.id === assistantMsgId
-          ? {
-              ...m,
-              content: `Error: ${String(err)}`,
-              isStreaming: false,
-            }
-          : m
-      );
-      setMessages(errorMsgs);
-      saveProjectChat(selectedId, JSON.stringify(errorMsgs));
-    }
+    );
   };
 
   const handleAutoFixError = (errorText: string) => {

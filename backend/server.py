@@ -65,15 +65,15 @@ Every frame must be clean, elegant, with ZERO overlapping text, ZERO colliding a
    - Never stack labels on top of the Y-axis apex or directly on the curve endpoints.
    - Always place legend / curve labels clearly in open space or offset with next_to:
      ```python
-     sin_label = Text("y = sin(x)", font_size=18, color=GRAPH_COLOR).to_corner(UR, buff=0.8)
-     cos_label = Text("y = cos(x)", font_size=18, color=PATH_COLOR).next_to(sin_label, DOWN, buff=0.25, aligned_edge=LEFT)
+     sin_label = Text("y = sin(x)", font="Segoe UI", font_size=18, color=GRAPH_COLOR).to_corner(UR, buff=0.8)
+     cos_label = Text("y = cos(x)", font="Segoe UI", font_size=18, color=PATH_COLOR).next_to(sin_label, DOWN, buff=0.25, aligned_edge=LEFT)
      ```
 
 3. **CRITICAL TYPOGRAPHY & ESCAPING RULES (PREVENT 'extbf' OR ESCAPE BUGS)**:
    - ⚠️ NEVER use LaTeX formatting like `\textbf{...}` inside `Text(...)`!
    - To make bold or italic text, ALWAYS use native Manim parameters:
      ```python
-     title = Text("Neural Network Optimization", weight=BOLD, font_size=28, color="#cdd6f4").to_edge(UP, buff=0.5)
+     title = Text("Neural Network Optimization", weight=BOLD, font="Segoe UI", font_size=28, color="#cdd6f4").to_edge(UP, buff=0.5)
      ```
    - If writing math with backslashes, ALWAYS use raw string literals `r"..."` (e.g. `r"\theta"`, `r"\tau"`, `r"\alpha"`). Without `r"..."`, Python interprets `\t` as a Tab character and strips `\t` into `extbf` or corrupted text!
 
@@ -83,7 +83,7 @@ Every frame must be clean, elegant, with ZERO overlapping text, ZERO colliding a
      - Connect neurons with synaptic weight lines: `Line(n1.get_center(), n2.get_center(), stroke_opacity=0.25, stroke_width=1.5, color="#71717a")`.
      - Animate the **Forward Pass**: Flash pulses of light (`#89b4fa`) moving from input to output.
      - Animate **Backpropagation / Loss Gradient**: Reverse pulses (`#f38ba8`) flowing backwards as weights adjust.
-     - Add clean layer labels below each column: `Text("Input", font_size=16)`, `Text("Hidden", font_size=16)`, `Text("Output", font_size=16)`.
+     - Add clean layer labels below each column: `Text("Input", font="Segoe UI", font_size=16)`, `Text("Hidden", font="Segoe UI", font_size=16)`, `Text("Output", font="Segoe UI", font_size=16)`.
 
 5. **VIETNAMESE & UNICODE TYPOGRAPHY (ZERO MISSING GLYPHS / NO TOFU BOXES)**:
    - When writing Vietnamese text in `Text(...)` (e.g. `Lan truyền thuận`, `Đồ thị`, `Tầng ẩn`), ALWAYS specify `font="Segoe UI"` or `font="Arial"`:
@@ -167,111 +167,6 @@ def resolve_model(agent_id: str, prompt: str) -> tuple[str, str]:
     target_model = AGENT_MODEL_MAP.get(agent_id.lower(), "deepseek/deepseek-chat")
     return target_model, prompt
 
-def call_llm(prompt: str, current_code: str = "", agent_id: str = "agy") -> tuple[str | None, str]:
-    api_key = os.environ.get("OPENROUTER_API_KEY", "")
-    if not api_key:
-        api_key = "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"
-
-    model_name, clean_prompt = resolve_model(agent_id, prompt)
-
-    user_msg = f"User: {clean_prompt}\n\n[Current scene.py code:\n```python\n{current_code}\n```]" if current_code and len(current_code.strip()) > 0 else f"User: {clean_prompt}"
-
-    payload = {
-        "model": model_name,
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_msg}
-        ],
-        "temperature": 0.3,
-    }
-
-    req = urllib.request.Request(
-        "https://openrouter.ai/api/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/lux0166/ManimForge",
-            "X-Title": "ManimForge Studio",
-            "User-Agent": "ManimForge/1.0"
-        },
-        data=json.dumps(payload).encode("utf-8")
-    )
-
-    try:
-        with urllib.request.urlopen(req, timeout=60) as response:
-            res_data = json.loads(response.read().decode("utf-8"))
-            content = res_data["choices"][0]["message"]["content"]
-            
-            code_match = re.search(r"```python\s*([\s\S]*?)\s*```", content)
-            if code_match:
-                code = code_match.group(1).strip()
-                explanation = re.sub(r"```python[\s\S]*?```", "", content).strip()
-                return code, explanation
-            else:
-                return None, content.strip()
-    except Exception as e:
-        print(f"LLM API Error with model {model_name}: {e}", file=sys.stderr)
-        p = clean_prompt.lower()
-        if any(w in p for w in ["vẽ", "tạo", "mô phỏng", "đồ thị", "draw", "animate", "create", "plot", "sin", "cos", "wave"]):
-            return generate_fallback_scene(clean_prompt), f"Đã khởi tạo hoạt cảnh toán học ({model_name}) cho: '{clean_prompt}'."
-        else:
-            return None, f"Chào bạn! Tôi là trợ lý ManimForge (Model: {model_name}). Bạn có thể yêu cầu tôi mô phỏng hoặc vẽ bất kỳ hoạt cảnh toán học/vật lý nào bằng Manim Community v0.21."
-
-def generate_fallback_scene(prompt: str) -> str:
-    p = prompt.lower()
-    if "sin" in p or "cos" in p or "sóng" in p or "wave" in p:
-        return '''from manim import *
-import numpy as np
-
-# Parameters
-AMPLITUDE = 1.5 # @param min=0.5 max=3.0 step=0.1 label="Amplitude"
-FREQUENCY = 1.5 # @param min=0.5 max=4.0 step=0.5 label="Frequency"
-SPEED = 1.0 # @param min=0.5 max=2.0 step=0.5 label="Speed"
-
-class Scene(Scene):
-    def construct(self):
-        self.camera.background_color = "#11111b"
-        title = Text("Sine & Cosine Waves", font="Segoe UI", font_size=28, color="#cdd6f4").to_edge(UP, buff=0.6)
-        self.play(Write(title), run_time=0.8)
-
-        axes = Axes(
-            x_range=[-4, 4, 1],
-            y_range=[-2, 2, 1],
-            x_length=8,
-            y_length=4,
-            axis_config={"color": "#71717a"}
-        )
-        self.play(Create(axes), run_time=0.8)
-
-        sin_curve = axes.plot(lambda x: AMPLITUDE * np.sin(FREQUENCY * x), color="#89b4fa")
-        cos_curve = axes.plot(lambda x: AMPLITUDE * np.cos(FREQUENCY * x), color="#f38ba8")
-        sin_label = Text("y = sin(x)", font="Segoe UI", font_size=18, color="#89b4fa").next_to(axes, DOWN).shift(LEFT * 1.5)
-        cos_label = Text("y = cos(x)", font="Segoe UI", font_size=18, color="#f38ba8").next_to(axes, DOWN).shift(RIGHT * 1.5)
-
-        self.play(Create(sin_curve), Write(sin_label), run_time=SPEED)
-        self.play(Create(cos_curve), Write(cos_label), run_time=SPEED)
-        self.wait(1.5)
-'''
-    else:
-        return f'''from manim import *
-
-# Parameters
-SCALE = 1.2 # @param min=0.5 max=2.5 step=0.1 label="Scale"
-
-class Scene(Scene):
-    def construct(self):
-        self.camera.background_color = "#11111b"
-        title = Text("{prompt[:30]}", font="Segoe UI", font_size=26, color="#cdd6f4").to_edge(UP, buff=0.6)
-        self.play(Write(title), run_time=0.8)
-
-        c = Circle(radius=1.5 * SCALE, color="#89b4fa", fill_opacity=0.2)
-        dot = Dot(color="#f9e2af").move_to(c.get_top())
-
-        self.play(Create(c), run_time=1)
-        self.play(MoveAlongPath(dot, c), run_time=2, rate_func=linear)
-        self.wait(1)
-'''
-
 def get_system_unicode_font() -> str:
     if sys.platform == "win32":
         return "Segoe UI"
@@ -287,7 +182,7 @@ def patch_vietnamese_fonts(code: str) -> str:
         if "font=" not in inner and any(ord(c) > 127 for c in inner):
             return inner[:-1] + f', font="{font_name}")'
         return inner
-    return re.sub(r'Text\([^)]+\)', repl, code)]+\)', repl, code)
+    return re.sub(r'Text\([^)]+\)', repl, code)
 
 def render_scene(proj_dir: Path, code: str) -> tuple[bool, str, str]:
     proj_dir.mkdir(parents=True, exist_ok=True)
@@ -318,7 +213,7 @@ def render_scene(proj_dir: Path, code: str) -> tuple[bool, str, str]:
             cwd=str(proj_dir),
             capture_output=True,
             text=True,
-            timeout=45
+            timeout=60
         )
         if proc.returncode == 0:
             mp4_files = list(media_dir.glob("**/*.mp4"))
@@ -337,7 +232,7 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
     def end_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Cache-Control")
         super().end_headers()
 
     def do_OPTIONS(self):
@@ -451,6 +346,109 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
         body = self.rfile.read(length).decode("utf-8") if length > 0 else "{}"
         data = json.loads(body)
 
+        if path == "/api/chat_stream":
+            prompt = data.get("prompt", "")
+            agent_id = data.get("model", "agy")
+            proj_id = data.get("project_id", "")
+            current_code = data.get("current_code", "")
+
+            proj_dir = get_projects_dir() / proj_id
+
+            api_key = os.environ.get("OPENROUTER_API_KEY", "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")
+            model_name, clean_prompt = resolve_model(agent_id, prompt)
+
+            user_msg = f"User: {clean_prompt}\n\n[Current scene.py code:\n```python\n{current_code}\n```]" if current_code and len(current_code.strip()) > 0 else f"User: {clean_prompt}"
+
+            payload = {
+                "model": model_name,
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_msg}
+                ],
+                "temperature": 0.3,
+                "stream": True
+            }
+
+            req = urllib.request.Request(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://github.com/lux0166/ManimForge",
+                    "X-Title": "ManimForge Studio",
+                    "User-Agent": "ManimForge/1.0"
+                },
+                data=json.dumps(payload).encode("utf-8")
+            )
+
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self.end_headers()
+
+            accumulated_text = ""
+            try:
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    for line in resp:
+                        line = line.decode("utf-8").strip()
+                        if line.startswith("data: "):
+                            data_str = line[6:]
+                            if data_str == "[DONE]":
+                                break
+                            try:
+                                chunk = json.loads(data_str)
+                                delta = chunk["choices"][0]["delta"].get("content", "")
+                                if delta:
+                                    accumulated_text += delta
+                                    sse_payload = json.dumps({"type": "token", "content": delta})
+                                    self.wfile.write(f"data: {sse_payload}\n\n".encode("utf-8"))
+                                    self.wfile.flush()
+                            except:
+                                pass
+
+                # Stream completed, parse code
+                code_match = re.search(r"```python\s*([\s\S]*?)\s*```", accumulated_text)
+                if code_match:
+                    code = code_match.group(1).strip()
+                    explanation = re.sub(r"```python[\s\S]*?```", "", accumulated_text).strip()
+                    
+                    # Notify UI that rendering has started
+                    render_start_payload = json.dumps({"type": "render_start", "code": code})
+                    self.wfile.write(f"data: {render_start_payload}\n\n".encode("utf-8"))
+                    self.wfile.flush()
+
+                    success, video_url, msg = render_scene(proj_dir, code)
+
+                    done_payload = json.dumps({
+                        "type": "done",
+                        "is_code_update": True,
+                        "success": success,
+                        "code": code,
+                        "explanation": explanation,
+                        "video_url": video_url,
+                        "message": msg
+                    })
+                    self.wfile.write(f"data: {done_payload}\n\n".encode("utf-8"))
+                    self.wfile.flush()
+                else:
+                    done_payload = json.dumps({
+                        "type": "done",
+                        "is_code_update": False,
+                        "success": True,
+                        "code": None,
+                        "explanation": accumulated_text.strip(),
+                        "video_url": None,
+                        "message": "Chat response"
+                    })
+                    self.wfile.write(f"data: {done_payload}\n\n".encode("utf-8"))
+                    self.wfile.flush()
+            except Exception as e:
+                err_payload = json.dumps({"type": "error", "message": str(e)})
+                self.wfile.write(f"data: {err_payload}\n\n".encode("utf-8"))
+                self.wfile.flush()
+            return
+
         if path == "/api/chat":
             prompt = data.get("prompt", "")
             agent_id = data.get("model", "agy")
@@ -458,26 +456,68 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
             current_code = data.get("current_code", "")
 
             proj_dir = get_projects_dir() / proj_id
-            code, explanation = call_llm(prompt, current_code, agent_id)
 
-            if code:
-                success, video_url, msg = render_scene(proj_dir, code)
-                self.send_json({
-                    "is_code_update": True,
-                    "success": success,
-                    "code": code,
-                    "explanation": explanation,
-                    "video_url": video_url,
-                    "message": msg,
-                })
-            else:
+            api_key = os.environ.get("OPENROUTER_API_KEY", "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")
+            model_name, clean_prompt = resolve_model(agent_id, prompt)
+
+            user_msg = f"User: {clean_prompt}\n\n[Current scene.py code:\n```python\n{current_code}\n```]" if current_code and len(current_code.strip()) > 0 else f"User: {clean_prompt}"
+
+            payload = {
+                "model": model_name,
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_msg}
+                ],
+                "temperature": 0.3,
+            }
+
+            req = urllib.request.Request(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://github.com/lux0166/ManimForge",
+                    "X-Title": "ManimForge Studio",
+                    "User-Agent": "ManimForge/1.0"
+                },
+                data=json.dumps(payload).encode("utf-8")
+            )
+
+            try:
+                with urllib.request.urlopen(req, timeout=60) as response:
+                    res_data = json.loads(response.read().decode("utf-8"))
+                    content = res_data["choices"][0]["message"]["content"]
+                    
+                    code_match = re.search(r"```python\s*([\s\S]*?)\s*```", content)
+                    if code_match:
+                        code = code_match.group(1).strip()
+                        explanation = re.sub(r"```python[\s\S]*?```", "", content).strip()
+                        success, video_url, msg = render_scene(proj_dir, code)
+                        self.send_json({
+                            "is_code_update": True,
+                            "success": success,
+                            "code": code,
+                            "explanation": explanation,
+                            "video_url": video_url,
+                            "message": msg,
+                        })
+                    else:
+                        self.send_json({
+                            "is_code_update": False,
+                            "success": True,
+                            "code": None,
+                            "explanation": content.strip(),
+                            "video_url": None,
+                            "message": "Chat response",
+                        })
+            except Exception as e:
                 self.send_json({
                     "is_code_update": False,
-                    "success": True,
+                    "success": False,
                     "code": None,
-                    "explanation": explanation,
+                    "explanation": f"Lỗi kết nối AI: {e}",
                     "video_url": None,
-                    "message": "Chat response",
+                    "message": str(e),
                 })
             return
 

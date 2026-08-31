@@ -327,3 +327,74 @@ export async function mergeScenesMaster(projectId: string, code: string): Promis
     return { success: false, message: String(e) };
   }
 }
+
+export async function streamAgentPrompt(
+  agentId: string,
+  prompt: string,
+  projectId: string,
+  currentCode: string = "",
+  callbacks: {
+    onToken: (token: string, accumulated: string) => void;
+    onRenderStart?: (code: string) => void;
+    onDone: (result: AiChatResult & { is_code_update?: boolean }) => void;
+    onError: (err: string) => void;
+  }
+): Promise<void> {
+  try {
+    const res = await fetch(`${SERVER_URL}/api/chat_stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt,
+        model: agentId,
+        project_id: projectId,
+        current_code: currentCode,
+      }),
+    });
+
+    if (!res.body) {
+      throw new Error("No readable stream response from server");
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let accumulated = "";
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith("data: ")) {
+          const jsonStr = trimmed.slice(6);
+          try {
+            const evt = JSON.parse(jsonStr);
+            if (evt.type === "token") {
+              accumulated += evt.content;
+              callbacks.onToken(evt.content, accumulated);
+            } else if (evt.type === "render_start") {
+              if (callbacks.onRenderStart) callbacks.onRenderStart(evt.code);
+            } else if (evt.type === "done") {
+              callbacks.onDone(evt);
+              return;
+            } else if (evt.type === "error") {
+              callbacks.onError(evt.message || "Streaming error");
+              return;
+            }
+          } catch (e) {
+            // Ignore parse errors on partial chunks
+          }
+        }
+      }
+    }
+  } catch (err: any) {
+    console.error("streamAgentPrompt error:", err);
+    callbacks.onError(String(err));
+  }
+}
