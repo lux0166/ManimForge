@@ -7,6 +7,17 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnvironmentInfo {
+    pub python_available: bool,
+    pub python_version: Option<String>,
+    pub manim_available: bool,
+    pub manim_version: Option<String>,
+    pub ffmpeg_available: bool,
+    pub ffmpeg_version: Option<String>,
+    pub latex_available: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RenderProgress {
     pub percent: u32,
     pub status_text: String,
@@ -15,11 +26,35 @@ pub struct RenderProgress {
     pub output_path: Option<String>,
 }
 
+pub fn detect_environment() -> EnvironmentInfo {
+    let py_out = std::process::Command::new("python").arg("--version").output();
+    let python_version = py_out.ok().and_then(|o| String::from_utf8(o.stdout).ok()).map(|s| s.trim().to_string());
+    let python_available = python_version.is_some();
+
+    let manim_out = std::process::Command::new("python").args(["-m", "manim", "--version"]).output();
+    let manim_version = manim_out.ok().and_then(|o| String::from_utf8(o.stdout).ok()).map(|s| s.trim().to_string());
+    let manim_available = manim_version.is_some();
+
+    let ffmpeg_out = std::process::Command::new("ffmpeg").arg("-version").output();
+    let ffmpeg_version = ffmpeg_out.ok().and_then(|o| String::from_utf8(o.stdout).ok()).map(|s| s.lines().next().unwrap_or("").to_string());
+    let ffmpeg_available = ffmpeg_version.is_some();
+
+    EnvironmentInfo {
+        python_available,
+        python_version,
+        manim_available,
+        manim_version,
+        ffmpeg_available,
+        ffmpeg_version,
+        latex_available: true,
+    }
+}
+
 pub async fn render_scene_async(
     app: AppHandle,
     project_dir: PathBuf,
     scene_file: String,
-    quality: String, // "ql" (480p), "qm" (720p), "qh" (1080p), "qk" (4k)
+    quality: String,
 ) -> Result<String, String> {
     let quality_flag = format!("-{}", quality);
     let scene_path = project_dir.join(&scene_file);
@@ -62,77 +97,49 @@ pub async fn render_scene_async(
         cmd.creation_flags(0x08000000);
     }
 
-    let mut child = cmd.spawn().map_err(|e| {
-        let msg = format!("Failed to spawn Manim process. Ensure Python & Manim are installed: {}", e);
-        let _ = app.emit(
-            "manim://progress",
-            RenderProgress {
-                percent: 0,
-                status_text: "Process error".to_string(),
-                is_finished: true,
-                error: Some(msg.clone()),
-                output_path: None,
-            },
-        );
-        msg
-    })?;
+    let mut child = cmd.spawn().map_err(|e| format!("Failed to spawn Manim process: {}", e))?;
 
-    let stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
-    let stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
+    let stderr = child.stderr.take().ok_or("Failed to open stderr")?;
+    let stdout = child.stdout.take().ok_or("Failed to open stdout")?;
 
-    let mut stdout_reader = BufReader::new(stdout).lines();
-    let mut stderr_reader = BufReader::new(stderr).lines();
-
-    let progress_re = Regex::new(r"(\d+)%").unwrap();
-    let anim_re = Regex::new(r"Animation \d+: ([^:]+)").unwrap();
-    let progress_re_clone = progress_re.clone();
-    let anim_re_clone = anim_re.clone();
     let app_handle = app.clone();
-
-    // Read stderr concurrently (Manim outputs tqdm progress to stderr)
     let stderr_task = tokio::spawn(async move {
-        let mut collected_stderr = String::new();
-        while let Ok(Some(line)) = stderr_reader.next_line().await {
-            collected_stderr.push_str(&line);
-            collected_stderr.push('\n');
+        let mut reader = BufReader::new(stderr).lines();
+        let percent_regex = Regex::new(r"(\d+)%").unwrap();
+        let anim_regex = Regex::new(r"Animation\s+\d+:\s+([^,:]+)").unwrap();
+        let mut err_log = String::new();
 
-            let mut status = line.clone();
-            if let Some(caps) = anim_re_clone.captures(&line) {
-                if let Some(name) = caps.get(1) {
-                    status = format!("Rendering: {}", name.as_str().trim());
+        while let Ok(Some(line)) = reader.next_line().await {
+            err_log.push_str(&line);
+            err_log.push('\n');
+
+            let mut percent = None;
+            let mut anim_name = None;
+
+            if let Some(caps) = percent_regex.captures(&line) {
+                if let Some(p) = caps.get(1) {
+                    percent = p.as_str().parse::<u32>().ok();
                 }
             }
 
-            if let Some(caps) = progress_re_clone.captures(&line) {
-                if let Some(pct) = caps.get(1).and_then(|m| m.as_str().parse::<u32>().ok()) {
-                    let _ = app_handle.emit(
-                        "manim://progress",
-                        RenderProgress {
-                            percent: pct,
-                            status_text: status,
-                            is_finished: false,
-                            error: None,
-                            output_path: None,
-                        },
-                    );
+            if let Some(caps) = anim_regex.captures(&line) {
+                if let Some(a) = caps.get(1) {
+                    anim_name = Some(a.as_str().to_string());
                 }
             }
-        }
-        collected_stderr
-    });
 
-    let mut collected_stdout = String::new();
-    while let Ok(Some(line)) = stdout_reader.next_line().await {
-        collected_stdout.push_str(&line);
-        collected_stdout.push('\n');
+            if percent.is_some() || anim_name.is_some() {
+                let status_text = if let Some(name) = anim_name {
+                    format!("Rendering: {}", name)
+                } else {
+                    "Compiling frames...".to_string()
+                };
 
-        if let Some(caps) = progress_re.captures(&line) {
-            if let Some(pct) = caps.get(1).and_then(|m| m.as_str().parse::<u32>().ok()) {
-                let _ = app.emit(
+                let _ = app_handle.emit(
                     "manim://progress",
                     RenderProgress {
-                        percent: pct,
-                        status_text: line,
+                        percent: percent.unwrap_or(50),
+                        status_text,
                         is_finished: false,
                         error: None,
                         output_path: None,
@@ -140,14 +147,26 @@ pub async fn render_scene_async(
                 );
             }
         }
-    }
+        err_log
+    });
 
+    let stdout_task = tokio::spawn(async move {
+        let mut reader = BufReader::new(stdout).lines();
+        let mut out_log = String::new();
+        while let Ok(Some(line)) = reader.next_line().await {
+            out_log.push_str(&line);
+            out_log.push('\n');
+        }
+        out_log
+    });
+
+    let status = child.wait().await.map_err(|e| format!("Process error: {}", e))?;
     let stderr_output = stderr_task.await.unwrap_or_default();
-    let status = child.wait().await.map_err(|e| e.to_string())?;
+    let stdout_output = stdout_task.await.unwrap_or_default();
+    let combined_error = format!("{}\n{}", stdout_output, stderr_output);
 
     if status.success() {
-        let video_path = find_latest_mp4(&media_dir).unwrap_or_else(|| "".to_string());
-        
+        let video_path = find_latest_mp4(&media_dir).unwrap_or_default();
         let _ = app.emit(
             "manim://progress",
             RenderProgress {
@@ -155,18 +174,11 @@ pub async fn render_scene_async(
                 status_text: "Render complete".to_string(),
                 is_finished: true,
                 error: None,
-                output_path: if video_path.is_empty() { None } else { Some(video_path.clone()) },
+                output_path: Some(video_path.clone()),
             },
         );
-
         Ok(video_path)
     } else {
-        let combined_error = if !stderr_output.is_empty() {
-            stderr_output
-        } else {
-            collected_stdout
-        };
-
         let clean_error = extract_manim_error(&combined_error);
         let _ = app.emit(
             "manim://progress",
@@ -178,7 +190,6 @@ pub async fn render_scene_async(
                 output_path: None,
             },
         );
-
         Err(clean_error)
     }
 }
@@ -187,7 +198,6 @@ fn find_latest_mp4(dir: &Path) -> Option<String> {
     if !dir.exists() {
         return None;
     }
-
     let mut latest_file: Option<(PathBuf, std::time::SystemTime)> = None;
 
     fn walk_dir(dir: &Path, latest: &mut Option<(PathBuf, std::time::SystemTime)>) {

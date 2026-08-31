@@ -6,6 +6,8 @@ import { AppSidebar, type SidebarProjectItem } from "@/components/sidebar/AppSid
 import { ChatPanel, type ChatMessage } from "@/components/chat/ChatPanel";
 import { PreviewPanel } from "@/components/preview/PreviewPanel";
 import { CodeEditorPanel } from "@/components/editor/CodeEditorPanel";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import type { AgentActivityItem } from "@/components/agents/agent-activity/types";
 import {
   fetchEnvironment,
   fetchAvailableAgents,
@@ -13,6 +15,9 @@ import {
   createProject,
   saveProjectCode,
   loadProjectCode,
+  saveProjectChat,
+  loadProjectChat,
+  fetchProjectVideo,
   renderManimScene,
   executeAgentPrompt,
   onRenderProgress,
@@ -21,79 +26,48 @@ import {
   type AgentStreamChunk,
 } from "@/lib/tauri-bridge";
 
-const INITIAL_MANIM_CODE = `# Neural Network: Forward Pass & Backprop
+const INITIAL_MANIM_CODE = `# New Manim Animation Scene
 from manim import *
 
 # Hyperparameters
-NUM_LAYERS = 4 # @param min=2 max=8 step=1 label="Layers"
-LEARNING_RATE = 0.05 # @param min=0.01 max=0.5 step=0.01 label="Learning Rate"
-ANIMATION_SPEED = 1.0 # @param min=0.5 max=3.0 step=0.5 label="Speed Multiplier"
+NUM_ELEMENTS = 4 # @param min=1 max=10 step=1 label="Elements"
+ANIMATION_SPEED = 1.2 # @param min=0.5 max=3.0 step=0.1 label="Speed Multiplier"
 
 THEME = "Catppuccin Mocha"
-TITLE_TEXT = "Neural Network: Forward Pass & Backprop"
-STROKE_WIDTH = 2.5
+TITLE_TEXT = "Mathematical Visualization"
 
-# Color Palette
-COLOR_INPUT = "#89b4fa"
-COLOR_WEIGHT = "#f9e2af"
-COLOR_OUTPUT = "#a6e3a1"
-COLOR_TARGET = "#f38ba8"
-COLOR_TEXT = "#cdd6f4"
-
-class NeuralNetworkLearning(Scene):
+class Scene(Scene):
     def construct(self):
-        # Background
         self.camera.background_color = "#11111b"
 
         # Title
-        title = Text(TITLE_TEXT, font_size=28, color=COLOR_TEXT)
-        title.to_edge(UP, buff=0.6)
-        self.play(Write(title), run_time=1)
+        title = Text(TITLE_TEXT, font_size=28, color="#cdd6f4").to_edge(UP, buff=0.6)
+        self.play(Write(title), run_time=0.8)
 
-        # Input Nodes
-        node_x1 = Circle(radius=0.4, color=COLOR_INPUT, fill_opacity=0.2).shift(LEFT * 3 + UP * 1.2)
-        node_x2 = Circle(radius=0.4, color=COLOR_INPUT, fill_opacity=0.2).shift(LEFT * 3 + DOWN * 1.2)
-        label_x1 = Text("x₁ = 0.8", font_size=20, color=COLOR_TEXT).next_to(node_x1, LEFT)
-        label_x2 = Text("x₂ = 0.5", font_size=20, color=COLOR_TEXT).next_to(node_x2, LEFT)
+        # Central Geometry
+        circle = Circle(radius=1.5, color="#89b4fa", fill_opacity=0.25)
+        square = Square(side_length=2.4, color="#a6e3a1", fill_opacity=0.25)
 
-        # Output Node
-        node_y = Circle(radius=0.45, color=COLOR_OUTPUT, fill_opacity=0.2).shift(RIGHT * 2)
-        label_y_name = Text("Output", font_size=16, color=COLOR_TEXT).next_to(node_y, UP)
-        label_y_val = Text("ŷ = 0.67", font_size=20, color=COLOR_OUTPUT).move_to(node_y)
-
-        # Connections (Weights)
-        line_1 = Line(node_x1.get_right(), node_y.get_left(), color=COLOR_WEIGHT, stroke_width=STROKE_WIDTH)
-        line_2 = Line(node_x2.get_right(), node_y.get_left(), color=COLOR_WEIGHT, stroke_width=STROKE_WIDTH)
-        w1_label = Text("w₁ = 0.4", font_size=16, color=COLOR_WEIGHT).next_to(line_1.get_center(), UP * 0.4)
-        w2_label = Text("w₂ = 0.7", font_size=16, color=COLOR_WEIGHT).next_to(line_2.get_center(), DOWN * 0.4)
-
-        # Animations
-        self.play(
-            Create(node_x1), Create(node_x2),
-            Write(label_x1), Write(label_x2),
-            run_time=ANIMATION_SPEED
-        )
-        self.play(
-            Create(line_1), Create(line_2),
-            Write(w1_label), Write(w2_label),
-            run_time=ANIMATION_SPEED
-        )
-        self.play(
-            Create(node_y), Write(label_y_name), Write(label_y_val),
-            run_time=ANIMATION_SPEED
-        )
+        self.play(Create(circle), run_time=ANIMATION_SPEED)
+        self.wait(0.5)
+        self.play(Transform(circle, square), run_time=ANIMATION_SPEED)
         self.wait(1.5)
 `;
+
+const INITIAL_WELCOME_MSG: ChatMessage = {
+  id: "msg-welcome",
+  sender: "assistant",
+  content: "✨ **Welcome to ManimForge Studio**\n\nType any prompt in the composer below (e.g. *\"Vẽ hình tròn biến thành hình vuông\"* or *\"Mô phỏng sóng sin và chuỗi Fourier\"*) to generate, edit, and compile mathematical animations in real time with Manim Community v0.21.",
+  timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+};
 
 export default function App() {
   const [projects, setProjects] = useState<SidebarProjectItem[]>([
     { id: "proj_1", label: "Neural Network Learning" },
-    { id: "proj_2", label: "Fourier Epicycles" },
-    { id: "proj_3", label: "Matrix Eigenvectors" },
   ]);
   const [selectedId, setSelectedId] = useState<string>("proj_1");
   const [code, setCode] = useState<string>(INITIAL_MANIM_CODE);
-  const [renderStatus, setRenderStatus] = useState<"idle" | "preparing" | "rendering" | "ready" | "error">("ready");
+  const [renderStatus, setRenderStatus] = useState<"idle" | "preparing" | "rendering" | "ready" | "error">("idle");
   const [renderProgress, setRenderProgress] = useState<number>(0);
   const [renderLog, setRenderLog] = useState<string>("");
   const [renderError, setRenderError] = useState<string | null>(null);
@@ -101,26 +75,7 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [selectedModel, setSelectedModel] = useState<string>("agy");
   const [availableAgents, setAvailableAgents] = useState<AgentCliInfo[]>([]);
-
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "msg-1",
-      sender: "user",
-      content: "Show a tiny neural network making one prediction and then learning from its error.",
-      timestamp: "11:52 AM",
-    },
-    {
-      id: "msg-2",
-      sender: "assistant",
-      content: "I have created a scene illustrating a simple 2-input, 1-output neural network performing a forward pass, calculating error against a target output, and updating its weights via backpropagation to reduce error.\n\nI styled this video with editable parameters in the Variables tab.",
-      timestamp: "11:52 AM",
-      activities: [
-        { id: "act-1", type: "step", label: "Formulating neural network geometry", status: "complete" },
-        { id: "act-2", type: "tool", action: "write", target: "scene.py", additions: 48, deletions: 12 },
-        { id: "act-3", type: "step", label: "Compiled with Manim Community v0.21", status: "complete", meta: "scene.py" },
-      ],
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_WELCOME_MSG]);
 
   // Load initial backend environment & projects
   useEffect(() => {
@@ -138,9 +93,26 @@ export default function App() {
           setProjects(projList.map((p) => ({ id: p.id, label: p.name, prompt: p.prompt ?? undefined })));
           const firstProj = projList[0];
           setSelectedId(firstProj.id);
+          
           const loadedCode = await loadProjectCode(firstProj.id);
           if (loadedCode && loadedCode.trim().length > 0) {
             setCode(loadedCode);
+          }
+
+          // Load chat
+          const chatRaw = await loadProjectChat(firstProj.id);
+          try {
+            const parsed = JSON.parse(chatRaw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setMessages(parsed);
+            }
+          } catch {}
+
+          // Load video if exists
+          const video = await fetchProjectVideo(firstProj.id);
+          if (video) {
+            setVideoUrl(video);
+            setRenderStatus("ready");
           }
         }
       } catch (err) {
@@ -165,7 +137,7 @@ export default function App() {
           setRenderStatus("ready");
           setRenderError(null);
           if (p.output_path) {
-            setVideoUrl(p.output_path);
+            setVideoUrl(convertFileSrc(p.output_path));
           }
         }
       }
@@ -181,9 +153,74 @@ export default function App() {
   // Switch project handler
   const handleSelectProject = async (proj: SidebarProjectItem) => {
     setSelectedId(proj.id);
+    setRenderStatus("idle");
+    setRenderError(null);
+    setVideoUrl(null);
+
+    // Load code
     const loadedCode = await loadProjectCode(proj.id);
     if (loadedCode && loadedCode.trim().length > 0) {
       setCode(loadedCode);
+    } else {
+      setCode(INITIAL_MANIM_CODE);
+    }
+
+    // Load chat
+    const chatRaw = await loadProjectChat(proj.id);
+    try {
+      const parsed = JSON.parse(chatRaw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        setMessages(parsed);
+      } else {
+        setMessages([
+          {
+            id: `msg-${Date.now()}`,
+            sender: "assistant",
+            content: `📂 Switched to **${proj.label}**.\n\nReady to animate or edit code.`,
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          },
+        ]);
+      }
+    } catch {
+      setMessages([INITIAL_WELCOME_MSG]);
+    }
+
+    // Load video
+    const video = await fetchProjectVideo(proj.id);
+    if (video) {
+      setVideoUrl(video);
+      setRenderStatus("ready");
+    }
+  };
+
+  // Create new video project handler
+  const handleNewVideo = async () => {
+    const videoNumber = projects.length + 1;
+    const name = `Video ${videoNumber}`;
+    
+    // Reset all UI states immediately
+    setVideoUrl(null);
+    setRenderStatus("idle");
+    setRenderProgress(0);
+    setRenderError(null);
+    setRenderLog("");
+    setCode(INITIAL_MANIM_CODE);
+
+    const newWelcome: ChatMessage = {
+      id: `msg-${Date.now()}`,
+      sender: "assistant",
+      content: `🎬 **${name}** created!\n\nDescribe the mathematical scene or animation you want to create below.`,
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    };
+    setMessages([newWelcome]);
+
+    try {
+      const newMeta = await createProject(name, "Catppuccin Mocha", INITIAL_MANIM_CODE);
+      setProjects((prev) => [{ id: newMeta.id, label: newMeta.name }, ...prev]);
+      setSelectedId(newMeta.id);
+      saveProjectChat(newMeta.id, JSON.stringify([newWelcome]));
+    } catch (err) {
+      console.error("Failed to create project:", err);
     }
   };
 
@@ -237,10 +274,11 @@ export default function App() {
         { id: `act-${Date.now()}-1`, type: "step", label: `Invoking ${model || selectedModel} AI Engine...`, status: "active" },
         { id: `act-${Date.now()}-2`, type: "step", label: "Formulating Manim Community v0.21 geometry", status: "pending" },
         { id: `act-${Date.now()}-3`, type: "step", label: "Compiling 60fps scene video", status: "pending" },
-      ],
+      ] as AgentActivityItem[],
     };
 
-    setMessages((prev) => [...prev, userMsg, streamingAssistantMsg]);
+    const updatedMsgs = [...messages, userMsg, streamingAssistantMsg];
+    setMessages(updatedMsgs);
     setIsGenerating(true);
     setRenderStatus("rendering");
     setRenderProgress(25);
@@ -258,22 +296,29 @@ export default function App() {
         setCode(updatedCode);
       }
 
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantMsgId
-            ? {
-                ...m,
-                content: finalReply,
-                isStreaming: false,
-                activities: [
-                  { id: `act-1`, type: "step", label: `Agent reasoning (${model || selectedModel})`, status: "complete" },
-                  { id: `act-2`, type: "tool", action: "edit", target: "scene.py", additions: 36, deletions: 8 },
-                  { id: `act-3`, type: "step", label: "Compiled scene with Manim Community v0.21", status: "complete", meta: "scene.py" },
-                ],
-              }
-            : m
-        )
+      // Reload updated video from disk
+      const video = await fetchProjectVideo(selectedId);
+      if (video) {
+        setVideoUrl(video);
+      }
+
+      const finalMsgs: ChatMessage[] = updatedMsgs.map((m) =>
+        m.id === assistantMsgId
+          ? {
+              ...m,
+              content: finalReply,
+              isStreaming: false,
+              activities: [
+                { id: `act-1`, type: "step", label: `Agent reasoning (${model || selectedModel})`, status: "complete" },
+                { id: `act-2`, type: "tool", action: "edit", target: "scene.py", additions: 36, deletions: 8 },
+                { id: `act-3`, type: "step", label: "Compiled scene with Manim Community v0.21", status: "complete", meta: "scene.py" },
+              ] as AgentActivityItem[],
+            }
+          : m
       );
+
+      setMessages(finalMsgs);
+      saveProjectChat(selectedId, JSON.stringify(finalMsgs));
 
       setIsGenerating(false);
       setRenderStatus("ready");
@@ -283,17 +328,17 @@ export default function App() {
       setIsGenerating(false);
       setRenderStatus("error");
       setRenderError(String(err));
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantMsgId
-            ? {
-                ...m,
-                content: `Error: ${String(err)}`,
-                isStreaming: false,
-              }
-            : m
-        )
+      const errorMsgs = updatedMsgs.map((m) =>
+        m.id === assistantMsgId
+          ? {
+              ...m,
+              content: `Error: ${String(err)}`,
+              isStreaming: false,
+            }
+          : m
       );
+      setMessages(errorMsgs);
+      saveProjectChat(selectedId, JSON.stringify(errorMsgs));
     }
   };
 
@@ -322,12 +367,7 @@ export default function App() {
           items={projects}
           selectedId={selectedId}
           onSelect={handleSelectProject}
-          onNewVideo={async () => {
-            const newMeta = await createProject(`Video ${projects.length + 1}`, "Catppuccin Mocha", INITIAL_MANIM_CODE);
-            setProjects((prev) => [{ id: newMeta.id, label: newMeta.name }, ...prev]);
-            setSelectedId(newMeta.id);
-            setCode(INITIAL_MANIM_CODE);
-          }}
+          onNewVideo={handleNewVideo}
         />
       }
       chatSlot={

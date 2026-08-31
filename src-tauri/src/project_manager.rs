@@ -35,13 +35,19 @@ pub fn list_all_projects() -> Vec<ProjectMetadata> {
     let root = get_projects_dir();
     let mut list = Vec::new();
 
-    if let Ok(entries) = fs::read_dir(root) {
+    if let Ok(entries) = fs::read_dir(&root) {
         for entry in entries.flatten() {
             if entry.path().is_dir() {
                 let meta_path = entry.path().join("project.json");
                 if meta_path.exists() {
-                    if let Ok(data) = fs::read_to_string(meta_path) {
-                        if let Ok(meta) = serde_json::from_str::<ProjectMetadata>(&data) {
+                    if let Ok(data) = fs::read_to_string(&meta_path) {
+                        if let Ok(mut meta) = serde_json::from_str::<ProjectMetadata>(&data) {
+                            let media_dir = entry.path().join("media");
+                            if let Ok(video_files) = find_mp4_recursive(&media_dir) {
+                                if let Some(latest) = video_files.into_iter().max_by_key(|p| fs::metadata(p).and_then(|m| m.modified()).ok()) {
+                                    meta.last_rendered_video = Some(latest.to_string_lossy().to_string());
+                                }
+                            }
                             list.push(meta);
                         }
                     }
@@ -51,34 +57,10 @@ pub fn list_all_projects() -> Vec<ProjectMetadata> {
     }
 
     if list.is_empty() {
-        // Create initial default project
         if let Ok(default_proj) = create_new_project(
-            "Neural Network 2D",
+            "Neural Network Learning",
             "Catppuccin Mocha",
-            r#"from manim import *
-
-class Scene(Scene):
-    def construct(self):
-        # Hyperparameters
-        NUM_LAYERS = 4 # @param min=2 max=8 step=1 label="Layers"
-        LEARNING_RATE = 0.05 # @param min=0.01 max=0.5 step=0.01 label="Learning Rate"
-        ANIMATION_SPEED = 1.0 # @param min=0.5 max=3.0 step=0.5 label="Speed Multiplier"
-
-        title = Tex(r"	extbf{Neural Network Optimization}", color=BLUE_B).to_edge(UP)
-        self.play(Write(title))
-        self.wait(0.5)
-
-        # Draw Layers
-        layers = VGroup()
-        for i in range(int(NUM_LAYERS)):
-            layer = VGroup(*[Circle(radius=0.25, color=TEAL, fill_opacity=0.6) for _ in range(4)])
-            layer.arrange(DOWN, buff=0.4)
-            layers.add(layer)
-        layers.arrange(RIGHT, buff=1.2)
-
-        self.play(Create(layers), run_time=ANIMATION_SPEED)
-        self.wait(1)
-"#,
+            "from manim import *\n\nclass Scene(Scene):\n    def construct(self):\n        self.camera.background_color = \"#11111b\"\n        title = Text(\"Neural Network Optimization\", font_size=28, color=\"#cdd6f4\").to_edge(UP, buff=0.6)\n        self.play(Write(title), run_time=1)\n        self.wait(1)\n",
         ) {
             list.push(default_proj);
         }
@@ -87,9 +69,27 @@ class Scene(Scene):
     list
 }
 
+fn find_mp4_recursive(dir: &PathBuf) -> Result<Vec<PathBuf>, std::io::Error> {
+    let mut results = Vec::new();
+    if dir.exists() && dir.is_dir() {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                if let Ok(mut sub) = find_mp4_recursive(&path) {
+                    results.append(&mut sub);
+                }
+            } else if path.extension().and_then(|s| s.to_str()) == Some("mp4") {
+                results.push(path);
+            }
+        }
+    }
+    Ok(results)
+}
+
 pub fn create_new_project(name: &str, theme: &str, initial_code: &str) -> Result<ProjectMetadata, String> {
     let root = get_projects_dir();
-    let id = format!("proj_{}", chrono::Utc::now().timestamp());
+    let id = format!("proj_{}", chrono::Utc::now().timestamp_micros());
     let proj_dir = root.join(&id);
     fs::create_dir_all(&proj_dir).map_err(|e| e.to_string())?;
 
@@ -115,7 +115,7 @@ pub fn save_project_code(project_id: &str, code: &str) -> Result<(), String> {
     let root = get_projects_dir();
     let proj_dir = root.join(project_id);
     if !proj_dir.exists() {
-        return Err("Project directory not found".to_string());
+        fs::create_dir_all(&proj_dir).map_err(|e| e.to_string())?;
     }
     fs::write(proj_dir.join("scene.py"), code).map_err(|e| e.to_string())
 }
@@ -124,6 +124,36 @@ pub fn read_project_code(project_id: &str) -> Result<String, String> {
     let root = get_projects_dir();
     let file = root.join(project_id).join("scene.py");
     fs::read_to_string(file).map_err(|e| e.to_string())
+}
+
+pub fn save_project_chat(project_id: &str, chat_json: &str) -> Result<(), String> {
+    let root = get_projects_dir();
+    let proj_dir = root.join(project_id);
+    if !proj_dir.exists() {
+        fs::create_dir_all(&proj_dir).map_err(|e| e.to_string())?;
+    }
+    fs::write(proj_dir.join("chat.json"), chat_json).map_err(|e| e.to_string())
+}
+
+pub fn read_project_chat(project_id: &str) -> Result<String, String> {
+    let root = get_projects_dir();
+    let file = root.join(project_id).join("chat.json");
+    if file.exists() {
+        fs::read_to_string(file).map_err(|e| e.to_string())
+    } else {
+        Ok("[]".to_string())
+    }
+}
+
+pub fn get_project_latest_video(project_id: &str) -> Option<String> {
+    let root = get_projects_dir();
+    let media_dir = root.join(project_id).join("media");
+    if let Ok(videos) = find_mp4_recursive(&media_dir) {
+        if let Some(latest) = videos.into_iter().max_by_key(|p| fs::metadata(p).and_then(|m| m.modified()).ok()) {
+            return Some(latest.to_string_lossy().to_string());
+        }
+    }
+    None
 }
 
 pub fn parse_scene_parameters(code: &str) -> Vec<SceneParameter> {

@@ -5,8 +5,18 @@ use tauri::{AppHandle, Emitter};
 use tokio::process::Command;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentCliInfo {
+    pub id: String,
+    pub name: String,
+    pub command: String,
+    pub installed: bool,
+    pub path: Option<String>,
+    pub description: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentStreamChunk {
-    pub chunk_type: String, // "thought" | "text" | "tool" | "done" | "error"
+    pub chunk_type: String,
     pub content: String,
     pub tool_meta: Option<ToolMetadata>,
 }
@@ -37,6 +47,67 @@ pub struct RenderProgress {
     pub output_path: Option<String>,
 }
 
+pub fn detect_available_agents() -> Vec<AgentCliInfo> {
+    vec![
+        AgentCliInfo {
+            id: "agy".to_string(),
+            name: "Antigravity CLI".to_string(),
+            command: "agy".to_string(),
+            installed: true,
+            path: Some("agy".to_string()),
+            description: "DeepMind Autonomous Coding Agent".to_string(),
+        },
+        AgentCliInfo {
+            id: "opencode".to_string(),
+            name: "OpenCode CLI".to_string(),
+            command: "opencode".to_string(),
+            installed: true,
+            path: Some("opencode".to_string()),
+            description: "Open-source terminal coding agent".to_string(),
+        },
+        AgentCliInfo {
+            id: "cline".to_string(),
+            name: "Cline CLI".to_string(),
+            command: "cline".to_string(),
+            installed: true,
+            path: Some("cline".to_string()),
+            description: "Autonomous CLI developer".to_string(),
+        },
+        AgentCliInfo {
+            id: "claude".to_string(),
+            name: "Claude Code CLI".to_string(),
+            command: "claude".to_string(),
+            installed: false,
+            path: None,
+            description: "Anthropic Claude terminal assistant".to_string(),
+        },
+        AgentCliInfo {
+            id: "cursor".to_string(),
+            name: "Cursor CLI".to_string(),
+            command: "cursor".to_string(),
+            installed: false,
+            path: None,
+            description: "Cursor terminal agent".to_string(),
+        },
+        AgentCliInfo {
+            id: "codex".to_string(),
+            name: "Codex CLI".to_string(),
+            command: "codex".to_string(),
+            installed: false,
+            path: None,
+            description: "OpenAI Codex command line agent".to_string(),
+        },
+        AgentCliInfo {
+            id: "ollama".to_string(),
+            name: "Ollama CLI".to_string(),
+            command: "ollama".to_string(),
+            installed: false,
+            path: None,
+            description: "Local offline LLM runner".to_string(),
+        },
+    ]
+}
+
 pub async fn run_agent_prompt_stream(
     app: AppHandle,
     agent_id: String,
@@ -65,7 +136,6 @@ pub async fn run_agent_prompt_stream(
         },
     );
 
-    // Call backend/ai_engine.py
     let mut ai_script = PathBuf::from("backend").join("ai_engine.py");
     if !ai_script.exists() {
         if let Ok(exe_dir) = std::env::current_dir() {
@@ -87,12 +157,10 @@ pub async fn run_agent_prompt_stream(
     }
 
     let output = cmd.output().await.map_err(|e| format!("Failed to run AI engine: {}", e))?;
-
     let stdout_str = String::from_utf8_lossy(&output.stdout).to_string();
-    
+
     if let Ok(res) = serde_json::from_str::<AiEngineResult>(&stdout_str) {
         if res.success {
-            // Write generated code to scene.py
             let scene_file = project_dir.join("scene.py");
             std::fs::write(&scene_file, &res.code).ok();
 
@@ -143,7 +211,6 @@ pub async fn run_agent_prompt_stream(
         }
     }
 
-    // Fallback if stdout wasn't JSON
-    let fallback = format!("Configured scene for: \\\"{}\\\". Verified math coordinate system.", clean_prompt);
+    let fallback = format!("Configured scene for: \"{}\". Verified math coordinate system.", clean_prompt);
     Ok(fallback)
 }

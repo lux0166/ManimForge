@@ -97,8 +97,7 @@ export async function fetchAvailableAgents(): Promise<AgentCliInfo[]> {
 export async function fetchProjects(): Promise<ProjectMetadata[]> {
   if (!isTauriEnvironment()) {
     return [
-      { id: "proj_1", name: "Neural Network 2D", created_at: new Date().toISOString(), active_theme: "Catppuccin Mocha", prompt: "Show a neural network forward pass and optimization." },
-      { id: "proj_2", name: "Fourier Epicycles", created_at: new Date().toISOString(), active_theme: "Catppuccin Mocha", prompt: "Fourier Transform decomposition" },
+      { id: "proj_1", name: "Neural Network Learning", created_at: new Date().toISOString(), active_theme: "Catppuccin Mocha" },
     ];
   }
   return await invoke<ProjectMetadata[]>("list_projects");
@@ -131,6 +130,30 @@ export async function loadProjectCode(projectId: string): Promise<string> {
   return await invoke<string>("load_code", { projectId });
 }
 
+export async function saveProjectChat(projectId: string, chatJson: string): Promise<void> {
+  if (isTauriEnvironment()) {
+    await invoke("save_chat", { projectId, chatJson });
+  }
+}
+
+export async function loadProjectChat(projectId: string): Promise<string> {
+  if (!isTauriEnvironment()) {
+    return "[]";
+  }
+  return await invoke<string>("load_chat", { projectId });
+}
+
+export async function fetchProjectVideo(projectId: string): Promise<string | null> {
+  if (!isTauriEnvironment()) {
+    return null;
+  }
+  const rawPath = await invoke<string | null>("get_project_video", { projectId });
+  if (rawPath) {
+    return convertFileSrc(rawPath);
+  }
+  return null;
+}
+
 export async function fetchSceneParameters(code: string): Promise<SceneParameter[]> {
   if (!isTauriEnvironment()) {
     return [
@@ -148,7 +171,7 @@ export async function renderManimScene(
   quality: "ql" | "qm" | "qh" | "qk" = "ql"
 ): Promise<string> {
   if (!isTauriEnvironment()) {
-    return "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+    return "";
   }
   const fullPath = await invoke<string>("render_manim", { projectId, sceneFile, quality });
   return convertFileSrc(fullPath);

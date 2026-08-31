@@ -1,71 +1,84 @@
-pub mod cli_detector;
-pub mod cli_runner;
-pub mod manim_engine;
-pub mod project_manager;
+mod cli_runner;
+mod manim_engine;
+mod project_manager;
 
-use cli_detector::{check_environment, detect_installed_agents, AgentCliInfo, EnvironmentStatus};
-use manim_engine::render_scene_async;
-use project_manager::{
-    create_new_project, list_all_projects, parse_scene_parameters, read_project_code,
-    save_project_code, ProjectMetadata, SceneParameter,
-};
-use tauri::{command, AppHandle};
+use cli_runner::AgentCliInfo;
+use manim_engine::EnvironmentInfo;
+use project_manager::{ProjectMetadata, SceneParameter};
+use tauri::AppHandle;
 
-#[command]
-fn get_environment_info() -> EnvironmentStatus {
-    check_environment()
+#[tauri::command]
+fn get_environment_info() -> EnvironmentInfo {
+    manim_engine::detect_environment()
 }
 
-#[command]
+#[tauri::command]
 fn get_available_agents() -> Vec<AgentCliInfo> {
-    detect_installed_agents()
+    cli_runner::detect_available_agents()
 }
 
-#[command]
+#[tauri::command]
 fn list_projects() -> Vec<ProjectMetadata> {
-    list_all_projects()
+    project_manager::list_all_projects()
 }
 
-#[command]
+#[tauri::command]
 fn create_project(name: String, theme: String, initial_code: String) -> Result<ProjectMetadata, String> {
-    create_new_project(&name, &theme, &initial_code)
+    project_manager::create_new_project(&name, &theme, &initial_code)
 }
 
-#[command]
+#[tauri::command]
 fn save_code(project_id: String, code: String) -> Result<(), String> {
-    save_project_code(&project_id, &code)
+    project_manager::save_project_code(&project_id, &code)
 }
 
-#[command]
+#[tauri::command]
 fn load_code(project_id: String) -> Result<String, String> {
-    read_project_code(&project_id)
+    project_manager::read_project_code(&project_id)
 }
 
-#[command]
+#[tauri::command]
+fn save_chat(project_id: String, chat_json: String) -> Result<(), String> {
+    project_manager::save_project_chat(&project_id, &chat_json)
+}
+
+#[tauri::command]
+fn load_chat(project_id: String) -> Result<String, String> {
+    project_manager::read_project_chat(&project_id)
+}
+
+#[tauri::command]
+fn get_project_video(project_id: String) -> Option<String> {
+    project_manager::get_project_latest_video(&project_id)
+}
+
+#[tauri::command]
 fn get_scene_parameters(code: String) -> Vec<SceneParameter> {
-    parse_scene_parameters(&code)
+    project_manager::parse_scene_parameters(&code)
 }
 
-#[command]
+#[tauri::command]
 async fn render_manim(
     app: AppHandle,
     project_id: String,
     scene_file: String,
     quality: String,
 ) -> Result<String, String> {
-    let proj_dir = project_manager::get_projects_dir().join(project_id);
-    render_scene_async(app, proj_dir, scene_file, quality).await
+    let projects_dir = project_manager::get_projects_dir();
+    let project_dir = projects_dir.join(project_id);
+    manim_engine::render_scene_async(app, project_dir, scene_file, quality).await
 }
 
-#[command]
+#[tauri::command]
 async fn execute_agent_prompt(
     app: AppHandle,
     agent_id: String,
     prompt: String,
     project_id: String,
 ) -> Result<String, String> {
-    let proj_dir = project_manager::get_projects_dir().join(project_id);
-    cli_runner::run_agent_prompt_stream(app, agent_id, prompt, proj_dir).await
+    let projects_dir = project_manager::get_projects_dir();
+    let project_dir = projects_dir.join(project_id);
+    cli_runner::run_agent_prompt_stream(app, agent_id, prompt, project_dir).await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -81,6 +94,9 @@ pub fn run() {
             create_project,
             save_code,
             load_code,
+            save_chat,
+            load_chat,
+            get_project_video,
             get_scene_parameters,
             render_manim,
             execute_agent_prompt,
