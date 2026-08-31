@@ -6,7 +6,6 @@ import { AppSidebar, type SidebarProjectItem } from "@/components/sidebar/AppSid
 import { ChatPanel, type ChatMessage } from "@/components/chat/ChatPanel";
 import { PreviewPanel } from "@/components/preview/PreviewPanel";
 import { CodeEditorPanel } from "@/components/editor/CodeEditorPanel";
-import type { AgentActivityItem } from "@/components/agents/agent-activity/types";
 import {
   fetchEnvironment,
   fetchAvailableAgents,
@@ -22,34 +21,6 @@ import {
   type AiChatResult,
 } from "@/lib/tauri-bridge";
 
-const INITIAL_MANIM_CODE = `# Mathematical Visualization
-from manim import *
-
-# Hyperparameters
-NUM_ELEMENTS = 4 # @param min=1 max=10 step=1 label="Elements"
-ANIMATION_SPEED = 1.2 # @param min=0.5 max=3.0 step=0.1 label="Speed Multiplier"
-
-THEME = "Catppuccin Mocha"
-TITLE_TEXT = "Mathematical Visualization"
-
-class Scene(Scene):
-    def construct(self):
-        self.camera.background_color = "#11111b"
-
-        # Title
-        title = Text(TITLE_TEXT, font_size=28, color="#cdd6f4").to_edge(UP, buff=0.6)
-        self.play(Write(title), run_time=0.8)
-
-        # Central Geometry
-        circle = Circle(radius=1.5, color="#89b4fa", fill_opacity=0.25)
-        square = Square(side_length=2.4, color="#a6e3a1", fill_opacity=0.25)
-
-        self.play(Create(circle), run_time=ANIMATION_SPEED)
-        self.wait(0.5)
-        self.play(Transform(circle, square), run_time=ANIMATION_SPEED)
-        self.wait(1.5)
-`;
-
 const INITIAL_WELCOME_MSG: ChatMessage = {
   id: "msg-welcome",
   sender: "assistant",
@@ -59,10 +30,11 @@ const INITIAL_WELCOME_MSG: ChatMessage = {
 
 export default function App() {
   const [projects, setProjects] = useState<SidebarProjectItem[]>([
-    { id: "proj_1", label: "Mathematical Visualization" },
+    { id: "proj_1", label: "Video 1" },
   ]);
   const [selectedId, setSelectedId] = useState<string>("proj_1");
-  const [code, setCode] = useState<string>(INITIAL_MANIM_CODE);
+  // Default to empty code for clean slate
+  const [code, setCode] = useState<string>("");
   const [renderStatus, setRenderStatus] = useState<"idle" | "preparing" | "rendering" | "ready" | "error">("idle");
   const [renderProgress, setRenderProgress] = useState<number>(0);
   const [renderLog, setRenderLog] = useState<string>("");
@@ -72,6 +44,44 @@ export default function App() {
   const [selectedModel, setSelectedModel] = useState<string>("agy");
   const [availableAgents, setAvailableAgents] = useState<AgentCliInfo[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_WELCOME_MSG]);
+
+  const streamingTimerRef = useRef<number | null>(null);
+
+  // Smooth progressive code typewriter stream
+  const streamCodeIntoEditor = useCallback((targetCode: string, onFinish?: () => void) => {
+    if (streamingTimerRef.current) {
+      clearInterval(streamingTimerRef.current);
+      streamingTimerRef.current = null;
+    }
+
+    let currentIndex = 0;
+    const totalLength = targetCode.length;
+    // Typing speed tuned for smooth visual feel (~1.2s total)
+    const step = Math.max(2, Math.floor(totalLength / 45));
+
+    streamingTimerRef.current = window.setInterval(() => {
+      currentIndex += step;
+      if (currentIndex >= totalLength) {
+        if (streamingTimerRef.current) {
+          clearInterval(streamingTimerRef.current);
+          streamingTimerRef.current = null;
+        }
+        setCode(targetCode);
+        onFinish?.();
+      } else {
+        setCode(targetCode.slice(0, currentIndex));
+      }
+    }, 25);
+  }, []);
+
+  // Clean up streaming interval on unmount
+  useEffect(() => {
+    return () => {
+      if (streamingTimerRef.current) {
+        clearInterval(streamingTimerRef.current);
+      }
+    };
+  }, []);
 
   // Load initial backend environment & projects
   useEffect(() => {
@@ -93,6 +103,8 @@ export default function App() {
           const loadedCode = await loadProjectCode(firstProj.id);
           if (loadedCode && loadedCode.trim().length > 0) {
             setCode(loadedCode);
+          } else {
+            setCode("");
           }
 
           // Load chat
@@ -124,7 +136,7 @@ export default function App() {
     if (loadedCode && loadedCode.trim().length > 0) {
       setCode(loadedCode);
     } else {
-      setCode(INITIAL_MANIM_CODE);
+      setCode("");
     }
 
     // Load chat
@@ -148,18 +160,24 @@ export default function App() {
     }
   };
 
-  // Create new video project handler
+  // Create new video project handler - COMPLETELY BLANK SLATE
   const handleNewVideo = async () => {
     const videoNumber = projects.length + 1;
     const name = `Video ${videoNumber}`;
     
-    // Reset all UI states immediately
+    // Stop any ongoing stream
+    if (streamingTimerRef.current) {
+      clearInterval(streamingTimerRef.current);
+      streamingTimerRef.current = null;
+    }
+
+    // Reset all UI states to 100% EMPTY
+    setCode("");
     setVideoUrl(null);
     setRenderStatus("idle");
     setRenderProgress(0);
     setRenderError(null);
     setRenderLog("");
-    setCode(INITIAL_MANIM_CODE);
 
     const newWelcome: ChatMessage = {
       id: `msg-${Date.now()}`,
@@ -170,16 +188,19 @@ export default function App() {
     setMessages([newWelcome]);
 
     try {
-      const newMeta = await createProject(name, "Catppuccin Mocha", INITIAL_MANIM_CODE);
+      const newMeta = await createProject(name, "Catppuccin Mocha", "");
       setProjects((prev) => [{ id: newMeta.id, label: newMeta.name }, ...prev]);
       setSelectedId(newMeta.id);
       saveProjectChat(newMeta.id, JSON.stringify([newWelcome]));
+      saveProjectCode(newMeta.id, "");
     } catch (err) {
       console.error("Failed to create project:", err);
     }
   };
 
   const handleReRender = useCallback(async () => {
+    if (!code.trim()) return;
+
     setRenderStatus("rendering");
     setRenderProgress(30);
     setRenderError(null);
@@ -238,16 +259,20 @@ export default function App() {
       
       const isCodeUpdate = Boolean((result as any).is_code_update && result.code);
 
-      if (isCodeUpdate) {
-        if (result.code) {
-          setCode(result.code);
-        }
-        if (result.video_url) {
-          setVideoUrl(result.video_url);
-        }
-        setRenderStatus("ready");
-        setRenderProgress(100);
-        setRenderLog("Scene ready");
+      if (isCodeUpdate && result.code) {
+        const generatedCode = result.code;
+        const generatedVideoUrl = result.video_url;
+
+        // Progressive typewriter stream into Monaco Code Editor
+        streamCodeIntoEditor(generatedCode, () => {
+          saveProjectCode(selectedId, generatedCode);
+          if (generatedVideoUrl) {
+            setVideoUrl(generatedVideoUrl);
+          }
+          setRenderStatus("ready");
+          setRenderProgress(100);
+          setRenderLog("Scene ready");
+        });
       } else {
         setRenderStatus("idle");
         setRenderProgress(0);
