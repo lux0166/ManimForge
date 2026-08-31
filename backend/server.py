@@ -37,7 +37,7 @@ Every frame must be clean, elegant, with ZERO overlapping text, ZERO colliding a
 
 ---
 
-### 3. SURGICAL CODE EDITS VS FRESH GENERATION:
+### 2. SURGICAL CODE EDITS VS FRESH GENERATION:
 - **When Fixing Errors / Modifying Existing Code (SỬA LỖI & CHỈNH SỬA CỤC BỘ)**:
   - If `[Current scene.py code]` is provided and the user asks to fix an error, change a parameter, or add an animation:
     - ⚠️ **DO NOT rewrite the scene from scratch!**
@@ -46,6 +46,33 @@ Every frame must be clean, elegant, with ZERO overlapping text, ZERO colliding a
     - Apply the precise fix cleanly to the existing code.
 - **When Creating a Brand New Scene (TẠO HOẠT CẢNH MỚI)**:
   - Only when `[Current scene.py code]` is empty or the user asks for a completely different mathematical topic, construct a fresh scene following the golden standards.
+
+---
+
+### 3. LONG-FORM & MULTI-CHAPTER LECTURES (5 - 10 MINUTE VIDEOS):
+- When the user asks for a long video (e.g. "video 5 phút", "video 10 phút", "bài giảng chi tiết", "toàn bộ bài học"):
+  - ⚠️ DO NOT pack everything into a single cramped class.
+  - Divide the lecture into **3 to 6 distinct Chapter Scene classes** in the SAME script:
+    ```python
+    class Chapter1_Introduction(Scene):
+        def construct(self): ... # ~1-2 minutes: Hook, problem statement, key question
+
+    class Chapter2_CoreTheory(Scene):
+        def construct(self): ... # ~2-3 minutes: Mathematical formulation, definitions, theorems
+
+    class Chapter3_VisualProof(Scene):
+        def construct(self): ... # ~2-3 minutes: Dynamic graphs, geometric transformations, vectors
+
+    class Chapter4_Applications(Scene):
+        def construct(self): ... # ~2 minutes: Real-world physics simulation or engineering use-case
+
+    class Chapter5_Summary(Scene):
+        def construct(self): ... # ~1 minute: Key takeaways, formula recap
+    ```
+  - Pace the animations generously using `self.wait(2)` or `self.wait(3)` between concepts to give the audience time to absorb each visual step, achieving the requested lecture duration.
+  - The studio backend will AUTOMATICALLY render each chapter and stitch them together into one seamless 10-minute Master Video!
+
+---
 
 ### 4. CRITICAL ANTI-OVERLAPPING & VISUAL QUALITY RULES:
 
@@ -102,7 +129,12 @@ Every frame must be clean, elegant, with ZERO overlapping text, ZERO colliding a
      ```
    - ⚠️ NEVER omit the font for Vietnamese text because Windows default Serif font lacks composite diacritics (`ề`, `ậ`, `ắ`, `ỗ`, `ự`), which causes white rectangle tofu glyphs and detached accents!
 
-6. **COLOR HARMONY (Catppuccin Palette)**:
+6. **OUTPUT FORMAT RULE (EXACTLY ONE CODE BLOCK)**:
+   - ⚠️ NEVER output multiple ```python ... ``` code blocks in a single response!
+   - If explaining a bug or highlighting a specific line in text, write the snippet inline in single backticks (e.g. `rate_of_change = Text(...)`).
+   - Output EXACTLY ONE ```python ... ``` code block containing the complete, runnable `scene.py` script.
+
+7. **COLOR HARMONY (Catppuccin Palette)**:
    - Sapphire Blue: `"#89b4fa"`
    - Peach Orange: `"#fab387"`
    - Emerald Green: `"#a6e3a1"`
@@ -190,23 +222,6 @@ def extract_scene_code(text: str) -> tuple[str | None, str]:
     explanation = re.sub(r"```python[\s\S]*?```", "", text).strip()
     return main_block.strip(), explanation
 
-def get_system_unicode_font() -> str:
-    if sys.platform == "win32":
-        return "Segoe UI"
-    elif sys.platform == "darwin":
-        return "Helvetica Neue"
-    else:
-        return "DejaVu Sans"
-
-def patch_vietnamese_fonts(code: str) -> str:
-    font_name = get_system_unicode_font()
-    def repl(match):
-        inner = match.group(0)
-        if "font=" not in inner and any(ord(c) > 127 for c in inner):
-            return inner[:-1] + f', font="{font_name}")'
-        return inner
-    return re.sub(r'Text\([^)]+\)', repl, code)
-
 def get_or_create_project_meta(proj_dir: Path) -> dict:
     meta_file = proj_dir / "project.json"
     if meta_file.exists():
@@ -215,7 +230,6 @@ def get_or_create_project_meta(proj_dir: Path) -> dict:
         except:
             pass
     
-    # Auto-migration from chat.json or folder name
     created_at = str(proj_dir.stat().st_ctime)
     label = proj_dir.name
     chat_file = proj_dir / "chat.json"
@@ -244,47 +258,142 @@ def get_or_create_project_meta(proj_dir: Path) -> dict:
 
 def render_scene(proj_dir: Path, code: str) -> tuple[bool, str, str]:
     proj_dir.mkdir(parents=True, exist_ok=True)
-    code = patch_vietnamese_fonts(code)
     scene_file = proj_dir / "scene.py"
     scene_file.write_text(code, encoding="utf-8")
 
-    class_match = re.search(r"class\s+([A-Za-z0-9_]+)\s*\(\s*(?:Scene|ThreeDScene|MovingCameraScene)\s*\):", code)
-    scene_class = class_match.group(1) if class_match else "Scene"
+    scene_classes = re.findall(r"class\s+([A-Za-z0-9_]+)\s*\(\s*(?:Scene|ThreeDScene|MovingCameraScene)\s*\):", code)
+    if not scene_classes:
+        scene_classes = ["Scene"]
 
     media_dir = proj_dir / "media"
     media_dir.mkdir(exist_ok=True)
 
-    cmd = [
-        sys.executable,
-        "-m",
-        "manim",
-        "-ql",
-        str(scene_file),
-        scene_class,
-        "--media_dir",
-        "media",
-    ]
+    # Single Scene Quick Render
+    if len(scene_classes) == 1:
+        sc = scene_classes[0]
+        cmd = [
+            sys.executable,
+            "-m",
+            "manim",
+            "-ql",
+            str(scene_file),
+            sc,
+            "--media_dir",
+            "media",
+        ]
+        try:
+            proc = subprocess.run(cmd, cwd=str(proj_dir), capture_output=True, text=True, timeout=120)
+            if proc.returncode == 0:
+                mp4_files = list(media_dir.glob(f"**/{sc}.mp4")) or list(media_dir.glob("**/*.mp4"))
+                if mp4_files:
+                    latest = max(mp4_files, key=lambda f: f.stat().st_mtime)
+                    rel = latest.relative_to(proj_dir).as_posix()
+                    url = f"http://127.0.0.1:{PORT}/media/{proj_dir.name}/{rel}"
+                    return True, url, "Render complete"
+                return True, "", "No video file found"
+            else:
+                return False, "", proc.stderr or proc.stdout
+        except Exception as e:
+            return False, "", str(e)
+
+    # Multi-Chapter / Long Video Render & Merge
+    rendered_videos = []
+    errors = []
+    for sc in scene_classes:
+        cmd = [
+            sys.executable,
+            "-m",
+            "manim",
+            "-ql",
+            str(scene_file),
+            sc,
+            "--media_dir",
+            "media",
+        ]
+        try:
+            proc = subprocess.run(cmd, cwd=str(proj_dir), capture_output=True, text=True, timeout=120)
+            sc_mp4s = list(media_dir.glob(f"**/{sc}.mp4"))
+            if sc_mp4s:
+                rendered_videos.append(sc_mp4s[0])
+            elif proc.returncode != 0:
+                errors.append(f"[{sc} Error]: {proc.stderr[:200]}")
+        except Exception as e:
+            errors.append(f"[{sc} Error]: {str(e)}")
+
+    if rendered_videos:
+        if len(rendered_videos) == 1:
+            rel = rendered_videos[0].relative_to(proj_dir).as_posix()
+            url = f"http://127.0.0.1:{PORT}/media/{proj_dir.name}/{rel}"
+            return True, url, f"Rendered 1 of {len(scene_classes)} chapters"
+
+        concat_list_file = media_dir / "auto_concat_list.txt"
+        with open(concat_list_file, "w", encoding="utf-8") as cf:
+            for v in rendered_videos:
+                cf.write(f"file '{v.as_posix()}'\n")
+
+        merged_output = media_dir / "master_merged.mp4"
+        ffmpeg_cmd = [
+            "ffmpeg",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", str(concat_list_file),
+            "-c", "copy",
+            str(merged_output),
+            "-y"
+        ]
+        try:
+            subprocess.run(ffmpeg_cmd, cwd=str(proj_dir), capture_output=True, timeout=60)
+            rel = merged_output.relative_to(proj_dir).as_posix()
+            url = f"http://127.0.0.1:{PORT}/media/{proj_dir.name}/{rel}"
+            return True, url, f"Successfully rendered & merged all {len(rendered_videos)} chapters into 1 Master Video!"
+        except Exception as e:
+            rel = rendered_videos[0].relative_to(proj_dir).as_posix()
+            url = f"http://127.0.0.1:{PORT}/media/{proj_dir.name}/{rel}"
+            return True, url, f"Merged fallback: {str(e)}"
+
+    return False, "", "\n".join(errors) or "Failed to compile multi-chapter video"
+
+def call_llm(prompt: str, current_code: str = "", agent_id: str = "agy", api_key_override: str = "", endpoint_override: str = "") -> tuple[str | None, str]:
+    api_key = api_key_override or os.environ.get("OPENROUTER_API_KEY", "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")
+    endpoint_url = endpoint_override or "https://openrouter.ai/api/v1/chat/completions"
+
+    model_name, clean_prompt = resolve_model(agent_id, prompt)
+
+    user_msg = f"User: {clean_prompt}\n\n[Current scene.py code:\n```python\n{current_code}\n```]" if current_code and len(current_code.strip()) > 0 else f"User: {clean_prompt}"
+
+    payload = {
+        "model": model_name,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_msg}
+        ],
+        "temperature": 0.3,
+    }
+
+    req = urllib.request.Request(
+        endpoint_url,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/lux0166/ManimForge",
+            "X-Title": "ManimForge Studio",
+            "User-Agent": "ManimForge/1.0"
+        },
+        data=json.dumps(payload).encode("utf-8")
+    )
 
     try:
-        proc = subprocess.run(
-            cmd,
-            cwd=str(proj_dir),
-            capture_output=True,
-            text=True,
-            timeout=60
-        )
-        if proc.returncode == 0:
-            mp4_files = list(media_dir.glob("**/*.mp4"))
-            if mp4_files:
-                latest_mp4 = max(mp4_files, key=lambda f: f.stat().st_mtime)
-                rel = latest_mp4.relative_to(proj_dir).as_posix()
-                url = f"http://127.0.0.1:{PORT}/media/{proj_dir.name}/{rel}"
-                return True, url, "Render complete"
-            return True, "", "No video file found"
-        else:
-            return False, "", proc.stderr or proc.stdout
+        with urllib.request.urlopen(req, timeout=60) as response:
+            res_data = json.loads(response.read().decode("utf-8"))
+            content = res_data["choices"][0]["message"]["content"]
+            code, explanation = extract_scene_code(content)
+            if code:
+                return code, explanation
+            else:
+                return None, content.strip()
     except Exception as e:
-        return False, "", str(e)
+        print(f"LLM API Error with model {model_name}: {e}", file=sys.stderr)
+        return None, f"Lỗi kết nối AI ({model_name}): {e}"
 
 class ManimForgeHandler(BaseHTTPRequestHandler):
     def end_headers(self):
@@ -319,7 +428,6 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
                         "is_pinned": meta.get("isPinned", False),
                         "tags": meta.get("tags", [])
                     })
-            # Pinned items first, then by ID
             projects.sort(key=lambda x: (not x.get("is_pinned", False), x["id"]))
             if not projects:
                 initial_id = f"proj_{int(time.time()*1000)}"
@@ -376,6 +484,13 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
             proj_dir = get_projects_dir() / proj_id
             media_dir = proj_dir / "media"
             if media_dir.exists():
+                merged = media_dir / "master_merged.mp4"
+                if merged.exists():
+                    rel = merged.relative_to(proj_dir).as_posix()
+                    url = f"http://127.0.0.1:{PORT}/media/{proj_dir.name}/{rel}"
+                    self.send_json({"video_url": url})
+                    return
+
                 mp4_files = list(media_dir.glob("**/*.mp4"))
                 if mp4_files:
                     latest_mp4 = max(mp4_files, key=lambda f: f.stat().st_mtime)
@@ -451,7 +566,7 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
 
             accumulated_text = ""
             try:
-                with urllib.request.urlopen(req, timeout=60) as resp:
+                with urllib.request.urlopen(req, timeout=90) as resp:
                     for line in resp:
                         line = line.decode("utf-8").strip()
                         if line.startswith("data: "):
@@ -472,8 +587,6 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
                 # Stream completed, parse code safely
                 code, explanation = extract_scene_code(accumulated_text)
                 if code:
-                    
-                    # Notify UI that rendering has started
                     render_start_payload = json.dumps({"type": "render_start", "code": code})
                     self.wfile.write(f"data: {render_start_payload}\n\n".encode("utf-8"))
                     self.wfile.flush()
@@ -518,70 +631,26 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
             custom_endpoint = data.get("endpoint") or self.headers.get("X-Custom-Endpoint", "")
 
             proj_dir = get_projects_dir() / proj_id
+            code, explanation = call_llm(prompt, current_code, agent_id, custom_api_key, custom_endpoint)
 
-            api_key = custom_api_key or os.environ.get("OPENROUTER_API_KEY", "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")
-            endpoint_url = custom_endpoint or "https://openrouter.ai/api/v1/chat/completions"
-
-            model_name, clean_prompt = resolve_model(agent_id, prompt)
-
-            user_msg = f"User: {clean_prompt}\n\n[Current scene.py code:\n```python\n{current_code}\n```]" if current_code and len(current_code.strip()) > 0 else f"User: {clean_prompt}"
-
-            payload = {
-                "model": model_name,
-                "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_msg}
-                ],
-                "temperature": 0.3,
-            }
-
-            req = urllib.request.Request(
-                endpoint_url,
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://github.com/lux0166/ManimForge",
-                    "X-Title": "ManimForge Studio",
-                    "User-Agent": "ManimForge/1.0"
-                },
-                data=json.dumps(payload).encode("utf-8")
-            )
-
-            try:
-                with urllib.request.urlopen(req, timeout=60) as response:
-                    res_data = json.loads(response.read().decode("utf-8"))
-                    content = res_data["choices"][0]["message"]["content"]
-                    
-                    code_match = re.search(r"```python\s*([\s\S]*?)\s*```", content)
-                    if code_match:
-                        code = code_match.group(1).strip()
-                        explanation = re.sub(r"```python[\s\S]*?```", "", content).strip()
-                        success, video_url, msg = render_scene(proj_dir, code)
-                        self.send_json({
-                            "is_code_update": True,
-                            "success": success,
-                            "code": code,
-                            "explanation": explanation,
-                            "video_url": video_url,
-                            "message": msg,
-                        })
-                    else:
-                        self.send_json({
-                            "is_code_update": False,
-                            "success": True,
-                            "code": None,
-                            "explanation": content.strip(),
-                            "video_url": None,
-                            "message": "Chat response",
-                        })
-            except Exception as e:
+            if code:
+                success, video_url, msg = render_scene(proj_dir, code)
+                self.send_json({
+                    "is_code_update": True,
+                    "success": success,
+                    "code": code,
+                    "explanation": explanation,
+                    "video_url": video_url,
+                    "message": msg,
+                })
+            else:
                 self.send_json({
                     "is_code_update": False,
-                    "success": False,
+                    "success": True,
                     "code": None,
-                    "explanation": f"Lỗi kết nối AI: {e}",
+                    "explanation": explanation,
                     "video_url": None,
-                    "message": str(e),
+                    "message": "Chat response",
                 })
             return
 
