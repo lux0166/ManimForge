@@ -6,7 +6,6 @@ import { AppSidebar, type SidebarProjectItem } from "@/components/sidebar/AppSid
 import { ChatPanel, type ChatMessage } from "@/components/chat/ChatPanel";
 import { PreviewPanel } from "@/components/preview/PreviewPanel";
 import { CodeEditorPanel } from "@/components/editor/CodeEditorPanel";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import type { AgentActivityItem } from "@/components/agents/agent-activity/types";
 import {
   fetchEnvironment,
@@ -17,16 +16,13 @@ import {
   loadProjectCode,
   saveProjectChat,
   loadProjectChat,
-  fetchProjectVideo,
   renderManimScene,
   executeAgentPrompt,
-  onRenderProgress,
-  onAgentStream,
   type AgentCliInfo,
-  type AgentStreamChunk,
+  type AiChatResult,
 } from "@/lib/tauri-bridge";
 
-const INITIAL_MANIM_CODE = `# New Manim Animation Scene
+const INITIAL_MANIM_CODE = `# Mathematical Visualization
 from manim import *
 
 # Hyperparameters
@@ -57,13 +53,13 @@ class Scene(Scene):
 const INITIAL_WELCOME_MSG: ChatMessage = {
   id: "msg-welcome",
   sender: "assistant",
-  content: "✨ **Welcome to ManimForge Studio**\n\nType any prompt in the composer below (e.g. *\"Vẽ hình tròn biến thành hình vuông\"* or *\"Mô phỏng sóng sin và chuỗi Fourier\"*) to generate, edit, and compile mathematical animations in real time with Manim Community v0.21.",
+  content: "✨ **Welcome to ManimForge Studio**\n\nType any prompt in the composer below (e.g. *\"Vẽ đồ thị hàm sin và cos giao nhau\"* or *\"Mô phỏng chuỗi Fourier\"* or *\"Mạng nơ-ron học lan truyền\"* ) to generate, edit, and compile mathematical animations in real time with Manim Community v0.21.",
   timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
 };
 
 export default function App() {
   const [projects, setProjects] = useState<SidebarProjectItem[]>([
-    { id: "proj_1", label: "Neural Network Learning" },
+    { id: "proj_1", label: "Mathematical Visualization" },
   ]);
   const [selectedId, setSelectedId] = useState<string>("proj_1");
   const [code, setCode] = useState<string>(INITIAL_MANIM_CODE);
@@ -107,13 +103,6 @@ export default function App() {
               setMessages(parsed);
             }
           } catch {}
-
-          // Load video if exists
-          const video = await fetchProjectVideo(firstProj.id);
-          if (video) {
-            setVideoUrl(video);
-            setRenderStatus("ready");
-          }
         }
       } catch (err) {
         console.warn("Backend load error:", err);
@@ -121,33 +110,6 @@ export default function App() {
     }
 
     loadData();
-  }, []);
-
-  // Listen to live Manim Render progress stream
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    onRenderProgress((p) => {
-      setRenderProgress(p.percent);
-      setRenderLog(p.status_text);
-      if (p.is_finished) {
-        if (p.error) {
-          setRenderStatus("error");
-          setRenderError(p.status_text);
-        } else {
-          setRenderStatus("ready");
-          setRenderError(null);
-          if (p.output_path) {
-            setVideoUrl(convertFileSrc(p.output_path));
-          }
-        }
-      }
-    }).then((fn) => {
-      unlisten = fn;
-    }).catch(() => {});
-
-    return () => {
-      if (unlisten) unlisten();
-    };
   }, []);
 
   // Switch project handler
@@ -184,13 +146,6 @@ export default function App() {
     } catch {
       setMessages([INITIAL_WELCOME_MSG]);
     }
-
-    // Load video
-    const video = await fetchProjectVideo(proj.id);
-    if (video) {
-      setVideoUrl(video);
-      setRenderStatus("ready");
-    }
   };
 
   // Create new video project handler
@@ -226,17 +181,19 @@ export default function App() {
 
   const handleReRender = useCallback(async () => {
     setRenderStatus("rendering");
-    setRenderProgress(15);
+    setRenderProgress(30);
     setRenderError(null);
     setRenderLog("Compiling scene.py with Manim Community v0.21...");
 
     try {
       await saveProjectCode(selectedId, code);
-      const url = await renderManimScene(selectedId, "scene.py", "qh");
+      const url = await renderManimScene(selectedId, code, "ql");
       if (url) {
         setVideoUrl(url);
       }
+      setRenderProgress(100);
       setRenderStatus("ready");
+      setRenderLog("Render complete");
     } catch (err: any) {
       setRenderLog(String(err));
       setRenderError(String(err));
@@ -267,7 +224,7 @@ export default function App() {
     const streamingAssistantMsg: ChatMessage = {
       id: assistantMsgId,
       sender: "assistant",
-      content: "Reasoning and generating mathematical animation...",
+      content: "Reasoning and synthesizing mathematical animation...",
       isStreaming: true,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       activities: [
@@ -281,32 +238,27 @@ export default function App() {
     setMessages(updatedMsgs);
     setIsGenerating(true);
     setRenderStatus("rendering");
-    setRenderProgress(25);
-    setRenderLog(`AI Agent synthesizing: "${prompt}"...`);
+    setRenderProgress(30);
+    setRenderLog(`AI synthesizing: "${prompt}" with Manim Community v0.21...`);
 
     try {
-      const response = await executeAgentPrompt(model || selectedModel, prompt, selectedId);
+      const result: AiChatResult = await executeAgentPrompt(model || selectedModel, prompt, selectedId, code);
       
-      const cleanPrompt = prompt.replace("[PLAN MODE]", "").trim();
-      const finalReply = response || `Configured and updated scene for: "${cleanPrompt}".\n\nSynchronized mathematical parameters and compiled scene smoothly.`;
-
-      // Reload updated code from disk
-      const updatedCode = await loadProjectCode(selectedId);
-      if (updatedCode && updatedCode.trim().length > 0) {
-        setCode(updatedCode);
+      // Update Monaco code
+      if (result.code) {
+        setCode(result.code);
       }
 
-      // Reload updated video from disk
-      const video = await fetchProjectVideo(selectedId);
-      if (video) {
-        setVideoUrl(video);
+      // Update Video Player
+      if (result.video_url) {
+        setVideoUrl(result.video_url);
       }
 
       const finalMsgs: ChatMessage[] = updatedMsgs.map((m) =>
         m.id === assistantMsgId
           ? {
               ...m,
-              content: finalReply,
+              content: result.explanation || `Configured and updated scene for: "${prompt}".\n\nSynchronized mathematical parameters and compiled scene smoothly.`,
               isStreaming: false,
               activities: [
                 { id: `act-1`, type: "step", label: `Agent reasoning (${model || selectedModel})`, status: "complete" },
