@@ -34,15 +34,48 @@ Guidelines:
      - Use dark background `self.camera.background_color = "#11111b"`.
 """
 
-def call_llm(prompt: str, current_code: str = "") -> tuple[str | None, str]:
+AGENT_MODEL_MAP = {
+    "agy": "deepseek/deepseek-chat",
+    "opencode": "deepseek/deepseek-chat",
+    "cline": "deepseek/deepseek-chat",
+    "claude": "deepseek/deepseek-chat",
+    "cursor": "openai/gpt-4o-mini",
+    "codex": "openai/gpt-4o-mini",
+    "ollama": "qwen/qwen-2.5-coder-32b-instruct",
+}
+
+def resolve_model(agent_id: str, prompt: str) -> tuple[str, str]:
+    # Check if prompt starts with /model <name>
+    model_match = re.match(r"^/model\s+([^\s]+)\s*(.*)", prompt, re.DOTALL | re.IGNORECASE)
+    if model_match:
+        custom_model = model_match.group(1).strip()
+        remaining_prompt = model_match.group(2).strip()
+        # Clean custom model name
+        if "/" not in custom_model:
+            if "deepseek" in custom_model:
+                custom_model = "deepseek/deepseek-chat"
+            elif "gpt" in custom_model:
+                custom_model = "openai/gpt-4o-mini"
+            elif "qwen" in custom_model:
+                custom_model = "qwen/qwen-2.5-coder-32b-instruct"
+            elif "claude" in custom_model:
+                custom_model = "deepseek/deepseek-chat"
+        return custom_model, remaining_prompt or f"Switched model to {custom_model}"
+    
+    target_model = AGENT_MODEL_MAP.get(agent_id.lower(), "deepseek/deepseek-chat")
+    return target_model, prompt
+
+def call_llm(prompt: str, current_code: str = "", agent_id: str = "agy") -> tuple[str | None, str]:
     api_key = os.environ.get("OPENROUTER_API_KEY", "")
     if not api_key:
         api_key = "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"
 
-    user_msg = f"User: {prompt}\n\n[Current scene.py code:\n```python\n{current_code}\n```]" if current_code and len(current_code.strip()) > 0 else f"User: {prompt}"
+    model_name, clean_prompt = resolve_model(agent_id, prompt)
+
+    user_msg = f"User: {clean_prompt}\n\n[Current scene.py code:\n```python\n{current_code}\n```]" if current_code and len(current_code.strip()) > 0 else f"User: {clean_prompt}"
 
     payload = {
-        "model": "deepseek/deepseek-chat",
+        "model": model_name,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_msg}
@@ -75,12 +108,12 @@ def call_llm(prompt: str, current_code: str = "") -> tuple[str | None, str]:
             else:
                 return None, content.strip()
     except Exception as e:
-        print(f"LLM API Error: {e}", file=sys.stderr)
-        p = prompt.lower()
+        print(f"LLM API Error with model {model_name}: {e}", file=sys.stderr)
+        p = clean_prompt.lower()
         if any(w in p for w in ["vẽ", "tạo", "mô phỏng", "đồ thị", "draw", "animate", "create", "plot", "sin", "cos", "wave"]):
-            return generate_fallback_scene(prompt), f"Đã khởi tạo hoạt cảnh toán học cho: '{prompt}'."
+            return generate_fallback_scene(clean_prompt), f"Đã khởi tạo hoạt cảnh toán học ({model_name}) cho: '{clean_prompt}'."
         else:
-            return None, "Chào bạn! Tôi là trợ lý ManimForge. Bạn có thể yêu cầu tôi mô phỏng hoặc vẽ bất kỳ hoạt cảnh toán học/vật lý nào bằng Manim Community v0.21."
+            return None, f"Chào bạn! Tôi là trợ lý ManimForge (Model: {model_name}). Bạn có thể yêu cầu tôi mô phỏng hoặc vẽ bất kỳ hoạt cảnh toán học/vật lý nào bằng Manim Community v0.21."
 
 def generate_fallback_scene(prompt: str) -> str:
     p = prompt.lower()
@@ -280,12 +313,12 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
 
         if path == "/api/chat":
             prompt = data.get("prompt", "")
-            model = data.get("model", "agy")
+            agent_id = data.get("model", "agy")
             proj_id = data.get("project_id", "proj_1")
             current_code = data.get("current_code", "")
 
             proj_dir = get_projects_dir() / proj_id
-            code, explanation = call_llm(prompt, current_code)
+            code, explanation = call_llm(prompt, current_code, agent_id)
 
             if code:
                 success, video_url, msg = render_scene(proj_dir, code)
