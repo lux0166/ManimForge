@@ -275,6 +275,7 @@ export default function App() {
     setIsGenerating(true);
 
     let latestAccumulated = "";
+    let rafPending = false;
 
     await streamAgentPrompt(
       model || selectedModel,
@@ -284,22 +285,26 @@ export default function App() {
       {
         onToken: (_token, accumulated) => {
           latestAccumulated = accumulated;
-          // Extract text explanation vs code block
-          const codeMatch = accumulated.match(/```python\s*([\s\S]*?)(?:```|$)/);
-          const cleanExplanation = accumulated.replace(/```python[\s\S]*?(?:```|$)/, "").trim();
+          
+          if (!rafPending) {
+            rafPending = true;
+            requestAnimationFrame(() => {
+              rafPending = false;
+              const codeMatch = latestAccumulated.match(/```python\s*([\s\S]*?)(?:```|$)/);
+              const cleanExplanation = latestAccumulated.replace(/```python[\s\S]*?(?:```|$)/, "").trim();
 
-          // Live stream into chat bubble
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantMsgId
-                ? { ...m, content: cleanExplanation || "Đang viết code Manim..." }
-                : m
-            )
-          );
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsgId
+                    ? { ...m, content: cleanExplanation || "Đang viết code Manim..." }
+                    : m
+                )
+              );
 
-          // If code is streaming, live stream directly into Monaco editor in real time!
-          if (codeMatch && codeMatch[1]) {
-            setCode(codeMatch[1]);
+              if (codeMatch && codeMatch[1]) {
+                setCode(codeMatch[1]);
+              }
+            });
           }
         },
         onRenderStart: (finalCode) => {

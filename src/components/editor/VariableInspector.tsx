@@ -22,7 +22,7 @@ export interface VariableInspectorProps {
   className?: string;
 }
 
-export function VariableInspector({
+export const VariableInspector = React.memo(function VariableInspector({
   code,
   onChangeCode,
   onReRender,
@@ -195,4 +195,4 @@ export function VariableInspector({
       )}
     </div>
   );
-}
+});

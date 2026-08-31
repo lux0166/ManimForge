@@ -20,7 +20,7 @@ export interface KeyframeTimelineProps {
   className?: string;
 }
 
-export function KeyframeTimeline({
+export const KeyframeTimeline = React.memo(function KeyframeTimeline({
   code,
   currentTime,
   duration,
@@ -155,4 +155,4 @@ export function KeyframeTimeline({
       )}
     </div>
   );
-}
+});

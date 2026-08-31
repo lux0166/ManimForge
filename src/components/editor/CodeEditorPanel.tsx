@@ -15,7 +15,7 @@ export interface CodeEditorPanelProps {
   className?: string;
 }
 
-export function CodeEditorPanel({
+export const CodeEditorPanel = React.memo(function CodeEditorPanel({
   code,
   onChange,
   onRun,
@@ -129,4 +129,4 @@ export function CodeEditorPanel({
       </Tabs>
     </div>
   );
-}
+});

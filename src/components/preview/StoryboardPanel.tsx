@@ -19,7 +19,7 @@ export interface StoryboardPanelProps {
   className?: string;
 }
 
-export function StoryboardPanel({
+export const StoryboardPanel = React.memo(function StoryboardPanel({
   code,
   onRenderScene,
   onMergeMaster,
@@ -129,4 +129,4 @@ export function StoryboardPanel({
       </div>
     </div>
   );
-}
+});
