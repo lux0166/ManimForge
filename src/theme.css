@@ -1,0 +1,205 @@
+@layer base {
+  :root {
+    --page: #000000;
+    --canvas: #09090b;
+    --surface: #121214;
+    --field: #18181b;
+    --inset: #0c0c0e;
+    --line: #27272a;
+    --line-strong: #3f3f46;
+    
+    --ink: #ffffff;
+    --ink-2: #a1a1aa;
+    --ink-3: #71717a;
+    
+    --hover: rgba(255, 255, 255, 0.08);
+    --hover-2: rgba(255, 255, 255, 0.14);
+    
+    --accent: #ffffff;
+    --accent-hover: #e4e4e7;
+    --accent-ink: #000000;
+    --accent-tint: rgba(255, 255, 255, 0.12);
+    
+    --green: #22c55e;
+    --green-tint: rgba(34, 197, 94, 0.14);
+    --amber: #eab308;
+    --amber-tint: rgba(234, 179, 8, 0.14);
+    --rose: #ef4444;
+    --rose-tint: rgba(239, 68, 68, 0.14);
+    
+    /* Tailwind & shadcn aliases */
+    --background: var(--page);
+    --foreground: var(--ink);
+    --card: var(--surface);
+    --card-foreground: var(--ink);
+    --popover: var(--surface);
+    --popover-foreground: var(--ink);
+    --primary: #ffffff;
+    --primary-foreground: #000000;
+    --secondary: var(--field);
+    --secondary-foreground: var(--ink);
+    --muted: var(--field);
+    --muted-foreground: var(--ink-2);
+    --border: var(--line);
+    --input: var(--line);
+    --ring: #ffffff;
+    
+    --sidebar: var(--canvas);
+    --sidebar-foreground: var(--ink);
+    --sidebar-primary: #ffffff;
+    --sidebar-primary-foreground: #000000;
+    --sidebar-accent: var(--field);
+    --sidebar-accent-foreground: var(--ink);
+    --sidebar-border: var(--line);
+    --sidebar-ring: #ffffff;
+
+    --radius-window: 14px;
+    --radius-card: 12px;
+    --radius-control: 8px;
+    --radius-chip: 6px;
+  }
+}
+
+body {
+  background-color: var(--page);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  letter-spacing: -0.015em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Color & Surface Utility Classes */
+.bg-surface { background-color: var(--surface); }
+.bg-field { background-color: var(--field); }
+.bg-canvas { background-color: var(--canvas); }
+.bg-inset { background-color: var(--inset); }
+.border-line { border-color: var(--line); }
+.border-line-strong { border-color: var(--line-strong); }
+.text-ink { color: var(--ink); }
+.text-ink-2 { color: var(--ink-2); }
+.text-ink-3 { color: var(--ink-3); }
+.text-green { color: var(--green); }
+.text-red { color: var(--rose); }
+.bg-hover { background-color: var(--hover); }
+.bg-hover-2 { background-color: var(--hover-2); }
+
+.shadow-hairline {
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.shadow-card {
+  box-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.8), 0 0 0 1px var(--line);
+}
+
+.shadow-raised {
+  box-shadow: 0 14px 32px -4px rgba(0, 0, 0, 0.9), 0 0 0 1px var(--line);
+}
+
+.shadow-btn {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.shadow-overlay {
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.9), 0 0 0 1px var(--line);
+}
+
+.rounded-window {
+  border-radius: var(--radius-window);
+}
+
+.rounded-card {
+  border-radius: var(--radius-card);
+}
+
+.rounded-control {
+  border-radius: var(--radius-control);
+}
+
+.rounded-chip {
+  border-radius: var(--radius-chip);
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-pop-in {
+  animation: pop-in 180ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 400ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 350ms ease-out both;
+}
+
+@keyframes shimmer-text {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@keyframes eq-bounce {
+  0%, 100% { height: 25%; }
+  50% { height: 100%; }
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--line-strong);
+}
+
+.primitive-icon-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+}
