@@ -3,7 +3,7 @@
 <div align="center">
 
 **Next-Gen Desktop IDE for Mathematical Animations & Physics Visualizations**  
-*Powered by Tauri v2, React 19, Manim Community Engine & Autonomous CLI Agents*
+*Powered by Tauri v2, React 19, Manim Community Engine (v0.21) & Autonomous CLI Coding Agents*
 
 [![Tauri v2](https://img.shields.io/badge/Tauri-v2.0-blue?style=for-the-badge&logo=tauri&logoColor=white)](https://tauri.app)
 [![React 19](https://img.shields.io/badge/React-19.0-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
@@ -17,72 +17,81 @@
 
 ## 🌟 Overview
 
-**ManimForge Studio** is a modern, high-performance desktop application designed to supercharge the workflow of educators, researchers, mathematicians, and content creators authoring mathematical animations with [Manim Community](https://www.manim.community/).
+**ManimForge Studio** is a professional desktop IDE tailored for mathematicians, researchers, educators, and content creators authoring mathematical animations with [Manim Community v0.21](https://www.manim.community/).
 
-Built on top of **Tauri 2.0** and **React 19**, ManimForge combines instant code editing, live video playback, parameter tweaking, and autonomous AI coding agents into a cohesive, fluid workspace.
+Built with **Tauri 2.0**, **React 19**, and a **Multi-threaded Python Backend**, ManimForge combines real-time code generation, interactive variable sliders, animation keyframe scrubbers, multi-scene storyboards, and autonomous CLI coding agents into a unified, dark-mode workspace.
 
 ---
 
 ## ✨ Key Features
 
-### 1. 🤖 Autonomous CLI Agent Hub (`PromptBar`)
-- **Multi-Agent Orchestration**: Seamlessly interact with terminal coding agents including **Google DeepMind Antigravity CLI (`agy`)**, **OpenCode CLI (`opencode`)**, and **Cline CLI (`cline`)**.
-- **WebGL Rainbow Sweep**: Dynamic `glimm` rainbow shader sweep celebrating model transitions.
-- **`@` Data Tokens & `/` Slash Commands**: Rapidly query `@scene.py`, `@variables`, `@manim-docs`, or trigger `/render`, `/fix`, `/optimize`, and `/export`.
-- **Keyboard-First Plan Mode**: Effortlessly toggle between Direct Execution and **Plan Mode** (`agy • Plan ▾`) using the **`Tab`** key without any layout shift.
+### 1. 🤖 Intelligent Mathematical AI Assistant & Slash Commands
+- **Autonomous CLI Agent Hub**: Real-time integration with **Google DeepMind Antigravity CLI (`agy`)**, **OpenCode CLI (`opencode`)**, and **Cline CLI (`cline`)**.
+- **Real Model Routing**: Dynamic routing to state-of-the-art models (**DeepSeek-V3 / DeepSeek-R1**, **OpenAI GPT-4o / GPT-4o-mini**, **Qwen 2.5 Coder 32B**).
+- **Dynamic `/model` Slash Command**: Switch models on-the-fly directly from the chat prompt (e.g. `/model qwen`, `/model gpt-4o`, `/model deepseek`).
+- **Conversational Separation**: Distinguishes casual math discussions and questions from video generation requests.
+- **Typewriter Code Streaming**: Real-time progressive code streaming directly into Monaco Editor.
 
-### 2. 🧠 Expandable Thinking & Activity Traces (`ThinkingState`)
-- **Multi-Variant Process Tracing**: 4 distinct modes (`Steps`, `Reasoning`, `Search`, `Coding`).
-- **Shimmer Text Gradient & Animated Vertical Guide Line**: Visual feedback of the AI's internal reasoning loop before executing code modifications.
-- **Interactive Tool Inspection**: Inspect diff lines (`+48 -12`), files read, and shell commands executed in real-time.
+### 2. 🎛️ Interactive Parameter Sliders & Inspector (`Variables` Tab)
+- **`# @param` AST Parser**: Automatically extracts configurable parameters from python code:
+  ```python
+  AMPLITUDE = 1.5      # @param min=0.5 max=3.0 step=0.1 label="Amplitude"
+  FREQUENCY = 2.0      # @param min=0.5 max=5.0 step=0.5 label="Frequency"
+  COLOR_PRIMARY = "#89b4fa" # @param type=color label="Wave Color"
+  ```
+- **Reactive UI Controls**: Drag sliders or pick colors to immediately update the code and re-render the scene in real time without typing code manually.
 
-### 3. 🗳️ Human-in-the-Loop Decision Cards (`ApprovalCard`)
-- **Vertical Sliding Question Stack**: Smooth `translate3d` question transitions with dynamic height auto-adaptation.
-- **Rolling Odometer Digits**: Tactile step counter for question progression (`1 / 3` → `2 / 3`).
-- **Glide Cursor Effects**: Powered by `GlideMenu` with support for both radio auto-advance and multi-select checkboxes.
+### 3. ⏱️ Animation Keyframe Timeline & Scrubber
+- **Animation Milestone Extraction**: Parses `self.play(...)` and `self.wait(...)` run times from the scene code.
+- **Interactive Scrubber**: Displays color-coded animation milestone chips directly under the video player.
+- **Click-to-Seek**: Jump the video player to any specific animation milestone instantly.
 
-### 4. 🎛️ Live Parameter Inspector & Monaco Code Editor
-- **Interactive Parameter Sliders**: Tweak mathematical variables in real time with instant reflection in the scene.
-- **Full Monaco IDE**: Syntax highlighting for Python / Manim, AST error detection, and 1-Click Auto-Fix for render failures.
-- **Math Snippet Palette**: 1-click insertion for LaTeX formulas, matrices, coordinate grids, calculus Riemann sums, and neural network topologies.
+### 4. 🎬 Multi-Scene Storyboard & Master Video Merger
+- **Multi-Scene Organization**: Discovers all `class SceneName(Scene):` in your project.
+- **Sequential Storyboard Grid**: Preview individual scene components independently.
+- **1-Click Master Video Merger**: Automatically compiles all scenes and concatenates them with FFmpeg into a continuous master lecture video (`master_merged.mp4`).
 
-### 5. ⚡ 60fps Live Preview & Storyboard Timeline
-- **High-Performance Video Scrubber**: Frame-by-frame scrubbing, 4K/1080p/720p resolution switching, and zoom controls.
-- **Storyboard Timeline**: Visual scene transitions, pacing controller, and frame markers.
-- **Ambient Shader Backgrounds**: Powered by `@paper-design/shaders-react` for an immersive dark-mode aesthetic.
+### 5. 📁 Project Lifecycle & Native Context Menu
+- **Full Context Menu**: Right-click any project in the sidebar to:
+  - 📌 **Pin to Top / Unpin**: Keep priority animations at the top.
+  - ✏️ **Rename**: Inline editing of project titles.
+  - 📑 **Duplicate**: Clone entire scenes with code and chat history.
+  - 🗑️ **Delete**: Clean removal from disk and UI.
+- **Instant Search Bar**: Filter through projects in real time.
+
+### 6. 🚀 1080p60 & 4K Master Video Export
+- Export clean production videos in **1080p60** or **4K** with automatic browser download.
+- 1-Click AI Auto-Fix that repairs syntax and compiler errors from stack traces automatically.
 
 ---
 
 ## 🛠️ Architecture & Tech Stack
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      ManimForge Studio                      │
-├──────────────────────────────┬──────────────────────────────┤
-│       Frontend (UI/UX)       │    Native Backend (Rust)     │
-├──────────────────────────────┼──────────────────────────────┤
-│ • React 19 + TypeScript      │ • Tauri v2 Desktop Engine    │
-│ • Tailwind CSS v4            │ • Tokio Async Subprocesses   │
-│ • Motion (Framer Motion)     │ • CLI Detector & Runner      │
-│ • @beui Component Suite      │ • Manim Community Engine     │
-│ • Monaco Editor              │ • FFmpeg Video Transcoding   │
-│ • glimm WebGL Shader         │ • Project File Manager       │
-└──────────────────────────────┴──────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                          ManimForge Studio                             │
+├──────────────────────────────┬─────────────────────────────────────────┤
+│       Frontend (UI/UX)       │           Backend Engine                │
+├──────────────────────────────┼─────────────────────────────────────────┤
+│ • React 19 + TypeScript      │ • Multi-Threaded Python 3.14 Server     │
+│ • Tailwind CSS v4            │ • Manim Community Edition v0.21.0       │
+│ • Monaco Code Editor         │ • Cairo & FFmpeg Vector Compilation     │
+│ • Interactive Sliders Panel  │ • Dynamic OpenRouter LLM Gateway        │
+│ • Keyframe Timeline Scrubber │ • Real System CLI Detector              │
+│ • Multi-Scene Storyboard     │ • Multi-Scene FFmpeg Stitching Pipeline │
+└──────────────────────────────┴─────────────────────────────────────────┘
 ```
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Quick Start Guide
 
 ### Prerequisites
-
-Ensure you have the following installed on your machine:
 - **Node.js**: v18.0 or higher
-- **Rust & Cargo**: Latest stable toolchain (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`)
 - **Python**: 3.10+ with Manim Community (`pip install manim`)
-- **FFmpeg**: Required by Manim for video compilation
+- **FFmpeg**: Installed and added to system PATH
 
-### Installation
+### Installation & Launch
 
 1. **Clone the repository**:
    ```bash
@@ -95,46 +104,41 @@ Ensure you have the following installed on your machine:
    npm install
    ```
 
-3. **Start the Tauri desktop application in development mode**:
+3. **Start the Python Backend & Dev Server**:
    ```bash
+   # Terminal 1: Start Backend Server
+   python backend/server.py
+
+   # Terminal 2: Start Frontend Dev Server (or Tauri)
+   npm run dev
+   # or
    npm run tauri dev
    ```
 
-4. **Build production binaries**:
-   ```bash
-   npm run tauri build
-   ```
+4. **Open in Browser or Desktop App**:
+   - Web App: `http://localhost:5173`
+   - Native Desktop: Tauri window launches automatically.
 
 ---
 
-## 📂 Project Structure
+## 📂 Codebase Structure
 
 ```
 ManimForge/
+├── backend/
+│   ├── server.py              # Multi-threaded API & video streaming server
+│   └── ai_engine.py           # LLM synthesis & Manim v0.21 scene generator
 ├── src/
 │   ├── components/
-│   │   ├── agents/          # ThinkingState, Tool Result, Agent Activity
-│   │   ├── atoms/           # Button atoms & base primitives
-│   │   ├── cards/           # ApprovalCard (Human-in-the-loop)
-│   │   ├── chat/            # PromptBar, ChatPanel, Composer
-│   │   ├── editor/          # Monaco Code Editor Panel
-│   │   ├── inspector/       # Variable & Parameter Inspector
-│   │   ├── navigation/      # ProximitySidebar Timeline Minimap
-│   │   ├── palette/         # Math Snippet Palette
-│   │   ├── preview/         # 60fps Video Player & Shader Canvas
-│   │   └── storyboard/      # Storyboard Timeline controller
+│   │   ├── chat/              # PromptBar, ChatPanel, Model Dropdown
+│   │   ├── editor/            # Monaco Code Editor & VariableInspector (Sliders)
+│   │   ├── preview/           # Video Player, KeyframeTimeline, StoryboardPanel
+│   │   └── sidebar/           # AppSidebar with Context Menu (Pin/Rename/Delete)
 │   ├── lib/
-│   │   ├── tauri-bridge.ts  # IPC communication with Rust backend
-│   │   └── utils.ts         # Utility functions
-│   ├── theme.css            # Custom design tokens & keyframes
-│   └── App.tsx              # Root application layout
-├── src-tauri/
-│   ├── src/
-│   │   ├── cli_detector.rs  # Auto-detection of installed CLI agents
-│   │   ├── cli_runner.rs    # Subprocess execution & streaming
-│   │   ├── manim_engine.rs  # Manim compilation & rendering pipeline
-│   │   └── main.rs          # Tauri command registration
-│   └── tauri.conf.json      # Window, security & bundle configuration
+│   │   └── tauri-bridge.ts    # Dual-mode API bridge (Tauri IPC + Browser Fetch)
+│   ├── App.tsx                # Studio layout & state orchestrator
+│   └── theme.css              # Dark HUD tokens & animations
+├── src-tauri/                 # Tauri native desktop configuration & Rust runner
 └── README.md
 ```
 
@@ -142,9 +146,7 @@ ManimForge/
 
 ## 📄 License
 
-This project is proprietary and licensed under the MIT License.
-
----
+This project is licensed under the MIT License.
 
 <div align="center">
 Built with 💙 for the Mathematical Animation Community
