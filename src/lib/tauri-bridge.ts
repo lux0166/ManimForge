@@ -251,3 +251,48 @@ export async function onRenderProgress(callback: (progress: RenderProgress) => v
 export async function onAgentStream(callback: (chunk: AgentStreamChunk) => void): Promise<UnlistenFn> {
   return () => {};
 }
+
+export async function deleteProject(projectId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${SERVER_URL}/api/delete_project`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project_id: projectId }),
+    });
+    const data = await res.json();
+    return data.status === "deleted";
+  } catch (e) {
+    console.warn("deleteProject error:", e);
+    return false;
+  }
+}
+
+export async function renameProject(projectId: string, newName: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${SERVER_URL}/api/rename_project`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project_id: projectId, new_name: newName }),
+    });
+    const data = await res.json();
+    return data.status === "renamed";
+  } catch (e) {
+    console.warn("renameProject error:", e);
+    return false;
+  }
+}
+
+export async function duplicateProject(projectId: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${SERVER_URL}/api/duplicate_project`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project_id: projectId }),
+    });
+    const data = await res.json();
+    return data.new_project_id || null;
+  } catch (e) {
+    console.warn("duplicateProject error:", e);
+    return null;
+  }
+}

@@ -18,6 +18,9 @@ import {
   renderManimScene,
   executeAgentPrompt,
   exportMasterVideo,
+  deleteProject,
+  renameProject,
+  duplicateProject,
   type AgentCliInfo,
   type AiChatResult,
 } from "@/lib/tauri-bridge";
@@ -316,6 +319,45 @@ export default function App() {
     handleSendMessage(`Sửa lỗi biên dịch Manim sau trong code scene.py:\n\`\`\`\n${errorText}\n\`\`\``);
   };
 
+  // Project Sidebar Actions: Delete, Rename, Duplicate, Pin
+  const handleDeleteProject = async (id: string) => {
+    await deleteProject(id);
+    const updated = projects.filter((p) => p.id !== id);
+    setProjects(updated);
+    if (selectedId === id) {
+      if (updated.length > 0) {
+        handleSelectProject(updated[0]);
+      } else {
+        handleNewVideo();
+      }
+    }
+  };
+
+  const handleRenameProject = async (id: string, newName: string) => {
+    await renameProject(id, newName);
+    setProjects((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, label: newName } : p))
+    );
+  };
+
+  const handleDuplicateProject = async (id: string) => {
+    const newId = await duplicateProject(id);
+    if (newId) {
+      const projList = await fetchProjects();
+      setProjects(projList.map((p) => ({ id: p.id, label: p.name })));
+      const dup = projList.find((p) => p.id === newId);
+      if (dup) {
+        handleSelectProject({ id: dup.id, label: dup.name });
+      }
+    }
+  };
+
+  const handleTogglePin = (id: string) => {
+    setProjects((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, isPinned: !p.isPinned } : p))
+    );
+  };
+
   return (
     <StudioLayout
       sidebarSlot={
@@ -324,6 +366,10 @@ export default function App() {
           selectedId={selectedId}
           onSelect={handleSelectProject}
           onNewVideo={handleNewVideo}
+          onDelete={handleDeleteProject}
+          onRename={handleRenameProject}
+          onDuplicate={handleDuplicateProject}
+          onTogglePin={handleTogglePin}
         />
       }
       chatSlot={

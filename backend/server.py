@@ -8,6 +8,8 @@ from pathlib import Path
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 import urllib.parse
 import mimetypes
+import shutil
+import time
 
 PORT = 8765
 
@@ -344,6 +346,59 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
                 self.send_json({"success": False, "message": "Export completed but no video file found"})
             except Exception as e:
                 self.send_json({"success": False, "message": str(e)})
+            return
+
+        if path == "/api/delete_project":
+            proj_id = data.get("project_id", "")
+            if proj_id:
+                proj_dir = get_projects_dir() / proj_id
+                if proj_dir.exists():
+                    shutil.rmtree(proj_dir, ignore_errors=True)
+                    self.send_json({"status": "deleted", "project_id": proj_id})
+                    return
+            self.send_json({"status": "error", "message": "Project not found"})
+            return
+
+        if path == "/api/rename_project":
+            proj_id = data.get("project_id", "")
+            new_name = data.get("new_name", "Video")
+            if proj_id:
+                proj_dir = get_projects_dir() / proj_id
+                if proj_dir.exists():
+                    chat_file = proj_dir / "chat.json"
+                    chat_data = []
+                    if chat_file.exists():
+                        try:
+                            chat_data = json.loads(chat_file.read_text(encoding="utf-8"))
+                        except:
+                            chat_data = []
+                    new_welcome = {
+                        "id": "msg-welcome",
+                        "sender": "assistant",
+                        "content": f"🎬 **{new_name}** created!\n\nDescribe the mathematical scene or animation you want to create below.",
+                        "timestamp": "00:00"
+                    }
+                    if chat_data:
+                        chat_data[0] = new_welcome
+                    else:
+                        chat_data = [new_welcome]
+                    chat_file.write_text(json.dumps(chat_data, indent=2, ensure_ascii=False), encoding="utf-8")
+                    self.send_json({"status": "renamed", "project_id": proj_id, "name": new_name})
+                    return
+            self.send_json({"status": "error", "message": "Project not found"})
+            return
+
+        if path == "/api/duplicate_project":
+            proj_id = data.get("project_id", "")
+            if proj_id:
+                proj_dir = get_projects_dir() / proj_id
+                if proj_dir.exists():
+                    new_id = f"proj_{int(time.time()*1000)}"
+                    new_dir = get_projects_dir() / new_id
+                    shutil.copytree(proj_dir, new_dir)
+                    self.send_json({"status": "duplicated", "new_project_id": new_id})
+                    return
+            self.send_json({"status": "error", "message": "Project not found"})
             return
 
         if path == "/api/render":
