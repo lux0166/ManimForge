@@ -292,8 +292,6 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
                     })
             projects.sort(key=lambda x: x["id"])
             if not projects:
-                
-                p1.mkdir(parents=True, exist_ok=True)
                 initial_id = f"proj_{int(time.time()*1000)}"
                 (proj_dir / initial_id).mkdir(parents=True, exist_ok=True)
                 projects = [{"id": initial_id, "name": "Video 1", "created_at": str(time.time()), "active_theme": "Catppuccin Mocha"}]
@@ -379,6 +377,68 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
                     "video_url": None,
                     "message": "Chat response",
                 })
+            return
+
+        if path == "/api/merge_scenes":
+            proj_id = data.get("project_id", "")
+            code = data.get("code", "")
+            proj_dir = get_projects_dir() / proj_id
+            proj_dir.mkdir(parents=True, exist_ok=True)
+            
+            scene_file = proj_dir / "scene.py"
+            if code:
+                scene_file.write_text(code, encoding="utf-8")
+            else:
+                code = scene_file.read_text(encoding="utf-8") if scene_file.exists() else ""
+            
+            scene_classes = re.findall(r"class\s+([A-Za-z0-9_]+)\s*\(\s*Scene\s*\):", code)
+            if not scene_classes:
+                scene_classes = ["Scene"]
+            
+            media_dir = proj_dir / "media"
+            media_dir.mkdir(exist_ok=True)
+            
+            rendered_videos = []
+            for sc in scene_classes:
+                cmd = [
+                    sys.executable,
+                    "-m",
+                    "manim",
+                    "-qh",
+                    str(scene_file),
+                    sc,
+                    "--media_dir",
+                    "media",
+                ]
+                proc = subprocess.run(cmd, cwd=str(proj_dir), capture_output=True, text=True, timeout=120)
+                sc_mp4s = list(media_dir.glob(f"**/{sc}.mp4"))
+                if sc_mp4s:
+                    rendered_videos.append(sc_mp4s[0])
+            
+            if rendered_videos:
+                concat_list_file = media_dir / "concat_list.txt"
+                with open(concat_list_file, "w", encoding="utf-8") as cf:
+                    for v in rendered_videos:
+                        cf.write(f"file '{v.as_posix()}'\n")
+                
+                merged_output = media_dir / "master_merged.mp4"
+                ffmpeg_cmd = [
+                    "ffmpeg",
+                    "-f", "concat",
+                    "-safe", "0",
+                    "-i", str(concat_list_file),
+                    "-c", "copy",
+                    str(merged_output),
+                    "-y"
+                ]
+                subprocess.run(ffmpeg_cmd, cwd=str(proj_dir), capture_output=True)
+                
+                rel = merged_output.relative_to(proj_dir).as_posix()
+                url = f"http://127.0.0.1:{PORT}/media/{proj_dir.name}/{rel}"
+                self.send_json({"success": True, "video_url": url, "scenes_count": len(rendered_videos)})
+                return
+            
+            self.send_json({"success": False, "message": "Failed to compile individual scenes"})
             return
 
         if path == "/api/export":

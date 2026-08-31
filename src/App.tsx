@@ -385,6 +385,7 @@ export default function App() {
       }
       previewSlot={
         <PreviewPanel
+          code={code}
           videoUrl={videoUrl}
           status={renderStatus}
           progress={renderProgress}

@@ -306,3 +306,17 @@ export async function duplicateProject(projectId: string): Promise<string | null
     return null;
   }
 }
+
+export async function mergeScenesMaster(projectId: string, code: string): Promise<{ success: boolean; video_url?: string; message?: string }> {
+  try {
+    const res = await fetch(`${SERVER_URL}/api/merge_scenes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project_id: projectId, code }),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn("mergeScenes error:", e);
+    return { success: false, message: String(e) };
+  }
+}

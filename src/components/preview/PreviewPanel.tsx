@@ -16,6 +16,9 @@ import {
   Terminal,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/motion/tabs";
+import { KeyframeTimeline } from "@/components/preview/KeyframeTimeline";
+import { StoryboardPanel } from "@/components/preview/StoryboardPanel";
+import { LayoutGrid } from "lucide-react";
 import { ExportModal } from "@/components/export/ExportModal";
 import { ShaderBackground } from "@/components/motion/shader-background";
 import { AnimatedBadge } from "@/components/motion/animated-badge";
@@ -23,6 +26,7 @@ import { Loader } from "@/components/motion/loader";
 import { cn } from "@/lib/utils";
 
 export interface PreviewPanelProps {
+  code?: string;
   videoUrl?: string | null;
   status: "idle" | "preparing" | "rendering" | "ready" | "error";
   progress?: number;
@@ -33,6 +37,7 @@ export interface PreviewPanelProps {
 }
 
 export function PreviewPanel({
+  code = "",
   videoUrl,
   status = "idle",
   progress = 0,
@@ -114,6 +119,10 @@ export function PreviewPanel({
             <TabsTrigger value="preview" className="text-xs px-2.5 py-0.5 gap-1 rounded-md text-[#a1a1aa] data-[state=active]:text-black data-[state=active]:bg-white data-[state=active]:font-semibold">
               <Video className="size-3" />
               <span>Preview</span>
+            </TabsTrigger>
+            <TabsTrigger value="storyboard" className="text-xs px-2.5 py-0.5 gap-1 rounded-md text-[#a1a1aa] data-[state=active]:text-black data-[state=active]:bg-white data-[state=active]:font-semibold">
+              <LayoutGrid className="size-3" />
+              <span>Storyboard</span>
             </TabsTrigger>
             <TabsTrigger value="logs" className="text-xs px-2.5 py-0.5 gap-1 rounded-md text-[#a1a1aa] data-[state=active]:text-black data-[state=active]:bg-white data-[state=active]:font-semibold">
               <Terminal className="size-3" />

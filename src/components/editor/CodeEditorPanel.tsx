@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Editor from "@monaco-editor/react";
 import { Check, Copy, Maximize2, Minimize2, Play, FileCode2, Sliders } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/motion/tabs";
-import { ParameterInspector } from "@/components/inspector/ParameterInspector";
+import { VariableInspector } from "@/components/editor/VariableInspector";
 import { cn } from "@/lib/utils";
 
 export interface CodeEditorPanelProps {
@@ -120,10 +120,10 @@ export function CodeEditorPanel({
 
         {/* Tab 2: Live Parameter Inspector */}
         <TabsContent value="inspector" className="flex-1 min-h-0 m-0 overflow-y-auto">
-          <ParameterInspector
+          <VariableInspector
             code={code}
-            onCodeChange={onChange}
-            onTriggerRender={onRun}
+            onChangeCode={onChange}
+            onReRender={onRun}
           />
         </TabsContent>
       </Tabs>
