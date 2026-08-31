@@ -40,6 +40,26 @@ export interface RenderProgress {
   output_path?: string | null;
 }
 
+export interface AgentStreamChunk {
+  chunk_type: "thought" | "text" | "tool" | "done" | "error";
+  content: string;
+  tool_meta?: {
+    action: string;
+    target: string;
+    additions?: number;
+    deletions?: number;
+  };
+}
+
+export interface SceneParameter {
+  name: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  label: string;
+}
+
 export const isTauriEnvironment = (): boolean => {
   return typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__);
 };
@@ -62,9 +82,9 @@ export async function fetchEnvironment(): Promise<EnvironmentStatus> {
 export async function fetchAvailableAgents(): Promise<AgentCliInfo[]> {
   if (!isTauriEnvironment()) {
     return [
-      { id: "agy", name: "Antigravity CLI", command: "agy", installed: true, path: "C:\\Users\\Tran Huy\\AppData\\Local\\agy\\bin\\agy.EXE", description: "DeepMind Autonomous Coding Agent" },
-      { id: "opencode", name: "OpenCode CLI", command: "opencode", installed: true, path: "C:\\Users\\Tran Huy\\AppData\\Roaming\\npm\\opencode.EXE", description: "Open-source terminal coding agent" },
-      { id: "cline", name: "Cline CLI", command: "cline", installed: true, path: "C:\\Users\\Tran Huy\\AppData\\Roaming\\npm\\cline.CMD", description: "Autonomous CLI developer" },
+      { id: "agy", name: "Antigravity CLI", command: "agy", installed: true, path: "agy", description: "DeepMind Autonomous Coding Agent" },
+      { id: "opencode", name: "OpenCode CLI", command: "opencode", installed: true, path: "opencode", description: "Open-source terminal coding agent" },
+      { id: "cline", name: "Cline CLI", command: "cline", installed: true, path: "cline", description: "Autonomous CLI developer" },
       { id: "claude", name: "Claude Code CLI", command: "claude", installed: false, path: null, description: "Anthropic Claude terminal assistant" },
       { id: "cursor", name: "Cursor CLI", command: "cursor", installed: false, path: null, description: "Cursor terminal agent" },
       { id: "codex", name: "Codex CLI", command: "codex", installed: false, path: null, description: "OpenAI Codex command line agent" },
@@ -77,8 +97,8 @@ export async function fetchAvailableAgents(): Promise<AgentCliInfo[]> {
 export async function fetchProjects(): Promise<ProjectMetadata[]> {
   if (!isTauriEnvironment()) {
     return [
-      { id: "proj_1", name: "Video 2", created_at: new Date().toISOString(), active_theme: "Catppuccin Mocha", prompt: "Show a tiny neural network making one prediction and then learning from its error." },
-      { id: "proj_2", name: "Video 1", created_at: new Date().toISOString(), active_theme: "Catppuccin Mocha", prompt: "Fourier Transform decomposition" },
+      { id: "proj_1", name: "Neural Network 2D", created_at: new Date().toISOString(), active_theme: "Catppuccin Mocha", prompt: "Show a neural network forward pass and optimization." },
+      { id: "proj_2", name: "Fourier Epicycles", created_at: new Date().toISOString(), active_theme: "Catppuccin Mocha", prompt: "Fourier Transform decomposition" },
     ];
   }
   return await invoke<ProjectMetadata[]>("list_projects");
@@ -111,6 +131,17 @@ export async function loadProjectCode(projectId: string): Promise<string> {
   return await invoke<string>("load_code", { projectId });
 }
 
+export async function fetchSceneParameters(code: string): Promise<SceneParameter[]> {
+  if (!isTauriEnvironment()) {
+    return [
+      { name: "NUM_LAYERS", value: 4, min: 2, max: 8, step: 1, label: "Layers" },
+      { name: "LEARNING_RATE", value: 0.05, min: 0.01, max: 0.5, step: 0.01, label: "Learning Rate" },
+      { name: "ANIMATION_SPEED", value: 1.0, min: 0.5, max: 3.0, step: 0.5, label: "Speed Multiplier" },
+    ];
+  }
+  return await invoke<SceneParameter[]>("get_scene_parameters", { code });
+}
+
 export async function renderManimScene(
   projectId: string,
   sceneFile: string = "scene.py",
@@ -123,11 +154,31 @@ export async function renderManimScene(
   return convertFileSrc(fullPath);
 }
 
+export async function executeAgentPrompt(
+  agentId: string,
+  prompt: string,
+  projectId: string
+): Promise<string> {
+  if (!isTauriEnvironment()) {
+    return `Configured scene for: "${prompt}". Verified math coordinates.`;
+  }
+  return await invoke<string>("execute_agent_prompt", { agentId, prompt, projectId });
+}
+
 export async function onRenderProgress(callback: (progress: RenderProgress) => void): Promise<UnlistenFn> {
   if (!isTauriEnvironment()) {
     return () => {};
   }
   return await listen<RenderProgress>("manim://progress", (event) => {
+    callback(event.payload);
+  });
+}
+
+export async function onAgentStream(callback: (chunk: AgentStreamChunk) => void): Promise<UnlistenFn> {
+  if (!isTauriEnvironment()) {
+    return () => {};
+  }
+  return await listen<AgentStreamChunk>("agent://stream", (event) => {
     callback(event.payload);
   });
 }

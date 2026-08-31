@@ -1,3 +1,4 @@
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -10,6 +11,16 @@ pub struct ProjectMetadata {
     pub active_theme: String,
     pub prompt: Option<String>,
     pub last_rendered_video: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SceneParameter {
+    pub name: String,
+    pub value: f64,
+    pub min: f64,
+    pub max: f64,
+    pub step: f64,
+    pub label: String,
 }
 
 pub fn get_projects_dir() -> PathBuf {
@@ -36,6 +47,40 @@ pub fn list_all_projects() -> Vec<ProjectMetadata> {
                     }
                 }
             }
+        }
+    }
+
+    if list.is_empty() {
+        // Create initial default project
+        if let Ok(default_proj) = create_new_project(
+            "Neural Network 2D",
+            "Catppuccin Mocha",
+            r#"from manim import *
+
+class Scene(Scene):
+    def construct(self):
+        # Hyperparameters
+        NUM_LAYERS = 4 # @param min=2 max=8 step=1 label="Layers"
+        LEARNING_RATE = 0.05 # @param min=0.01 max=0.5 step=0.01 label="Learning Rate"
+        ANIMATION_SPEED = 1.0 # @param min=0.5 max=3.0 step=0.5 label="Speed Multiplier"
+
+        title = Tex(r"	extbf{Neural Network Optimization}", color=BLUE_B).to_edge(UP)
+        self.play(Write(title))
+        self.wait(0.5)
+
+        # Draw Layers
+        layers = VGroup()
+        for i in range(int(NUM_LAYERS)):
+            layer = VGroup(*[Circle(radius=0.25, color=TEAL, fill_opacity=0.6) for _ in range(4)])
+            layer.arrange(DOWN, buff=0.4)
+            layers.add(layer)
+        layers.arrange(RIGHT, buff=1.2)
+
+        self.play(Create(layers), run_time=ANIMATION_SPEED)
+        self.wait(1)
+"#,
+        ) {
+            list.push(default_proj);
         }
     }
 
@@ -79,4 +124,29 @@ pub fn read_project_code(project_id: &str) -> Result<String, String> {
     let root = get_projects_dir();
     let file = root.join(project_id).join("scene.py");
     fs::read_to_string(file).map_err(|e| e.to_string())
+}
+
+pub fn parse_scene_parameters(code: &str) -> Vec<SceneParameter> {
+    let mut params = Vec::new();
+    let re = Regex::new(r#"([A-Z0-9_]+)\s*=\s*([0-9.]+)\s*#\s*@param(?:\s+min=([0-9.]+))?(?:\s+max=([0-9.]+))?(?:\s+step=([0-9.]+))?(?:\s+label="([^"]+)")?"#).unwrap();
+
+    for cap in re.captures_iter(code) {
+        let name = cap.get(1).map_or("", |m| m.as_str()).to_string();
+        let val: f64 = cap.get(2).and_then(|m| m.as_str().parse().ok()).unwrap_or(1.0);
+        let min: f64 = cap.get(3).and_then(|m| m.as_str().parse().ok()).unwrap_or(0.0);
+        let max: f64 = cap.get(4).and_then(|m| m.as_str().parse().ok()).unwrap_or(10.0);
+        let step: f64 = cap.get(5).and_then(|m| m.as_str().parse().ok()).unwrap_or(0.1);
+        let label = cap.get(6).map_or(name.clone(), |m| m.as_str().to_string());
+
+        params.push(SceneParameter {
+            name,
+            value: val,
+            min,
+            max,
+            step,
+            label,
+        });
+    }
+
+    params
 }

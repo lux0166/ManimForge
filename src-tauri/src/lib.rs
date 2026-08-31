@@ -6,9 +6,10 @@ pub mod project_manager;
 use cli_detector::{check_environment, detect_installed_agents, AgentCliInfo, EnvironmentStatus};
 use manim_engine::render_scene_async;
 use project_manager::{
-    create_new_project, list_all_projects, read_project_code, save_project_code, ProjectMetadata,
+    create_new_project, list_all_projects, parse_scene_parameters, read_project_code,
+    save_project_code, ProjectMetadata, SceneParameter,
 };
-use tauri::{AppHandle, command};
+use tauri::{command, AppHandle};
 
 #[command]
 fn get_environment_info() -> EnvironmentStatus {
@@ -38,6 +39,11 @@ fn save_code(project_id: String, code: String) -> Result<(), String> {
 #[command]
 fn load_code(project_id: String) -> Result<String, String> {
     read_project_code(&project_id)
+}
+
+#[command]
+fn get_scene_parameters(code: String) -> Vec<SceneParameter> {
+    parse_scene_parameters(&code)
 }
 
 #[command]
@@ -75,6 +81,7 @@ pub fn run() {
             create_project,
             save_code,
             load_code,
+            get_scene_parameters,
             render_manim,
             execute_agent_prompt,
         ])

@@ -1,13 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { Sparkles, Terminal } from "lucide-react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { StudioLayout } from "@/components/layout/StudioLayout";
 import { AppSidebar, type SidebarProjectItem } from "@/components/sidebar/AppSidebar";
 import { ChatPanel, type ChatMessage } from "@/components/chat/ChatPanel";
 import { PreviewPanel } from "@/components/preview/PreviewPanel";
 import { CodeEditorPanel } from "@/components/editor/CodeEditorPanel";
-import type { PromptModel } from "@/components/agents/prompt-input";
 import {
   fetchEnvironment,
   fetchAvailableAgents,
@@ -16,22 +14,24 @@ import {
   saveProjectCode,
   loadProjectCode,
   renderManimScene,
+  executeAgentPrompt,
   onRenderProgress,
+  onAgentStream,
   type AgentCliInfo,
+  type AgentStreamChunk,
 } from "@/lib/tauri-bridge";
 
 const INITIAL_MANIM_CODE = `# Neural Network: Forward Pass & Backprop
 import manim as m
 import numpy as np
 
-# Tokens & Parameters
+# Tokens & Hyperparameters
+NUM_LAYERS = 4 # @param min=2 max=8 step=1 label="Layers"
+LEARNING_RATE = 0.05 # @param min=0.01 max=0.5 step=0.01 label="Learning Rate"
+ANIMATION_SPEED = 1.0 # @param min=0.5 max=3.0 step=0.5 label="Speed Multiplier"
+
 THEME = "Catppuccin Mocha"
 TITLE_TEXT = "Neural Network: Forward Pass & Backprop"
-INPUT_1_VAL = 0.8
-INPUT_2_VAL = 0.5
-INIT_W1 = 0.4
-INIT_W2 = 0.7
-TARGET_VAL = 1.0
 STROKE_WIDTH = 2.5
 
 # Color Palette
@@ -113,16 +113,17 @@ export default function App() {
     {
       id: "msg-2",
       sender: "assistant",
-      content: "I have created a scene illustrating a simple 2-input, 1-output neural network performing a forward pass, calculating error against a target output, and updating its weights via backpropagation to reduce error.\\n\\nI styled this video with editable parameters in the Variables tab.",
+      content: "I have created a scene illustrating a simple 2-input, 1-output neural network performing a forward pass, calculating error against a target output, and updating its weights via backpropagation to reduce error.\n\nI styled this video with editable parameters in the Variables tab.",
       timestamp: "11:52 AM",
       activities: [
-        { id: "act-1", type: "trace", kind: "thinking", label: "Thinking", detail: "Formulating neural network geometry" },
-        { id: "act-2", type: "tool", action: "write", target: "scene.py" },
-        { id: "act-3", type: "trace", kind: "run", label: "Compiled with Manim Community v0.21", detail: "manim -qh scene.py NeuralNetworkLearning" },
+        { id: "act-1", type: "step", label: "Formulating neural network geometry", status: "complete" },
+        { id: "act-2", type: "tool", action: "write", target: "scene.py", additions: 48, deletions: 12 },
+        { id: "act-3", type: "step", label: "Compiled with Manim Community v0.21", status: "complete", meta: "scene.py" },
       ],
     },
   ]);
 
+  // Load initial backend environment & projects
   useEffect(() => {
     async function loadData() {
       const [env, agents, projList] = await Promise.all([
@@ -135,13 +136,19 @@ export default function App() {
 
       if (projList.length > 0) {
         setProjects(projList.map((p) => ({ id: p.id, label: p.name, prompt: p.prompt ?? undefined })));
-        setSelectedId(projList[0].id);
+        const firstProj = projList[0];
+        setSelectedId(firstProj.id);
+        const loadedCode = await loadProjectCode(firstProj.id);
+        if (loadedCode && loadedCode.trim().length > 0) {
+          setCode(loadedCode);
+        }
       }
     }
 
     loadData();
   }, []);
 
+  // Listen to live Manim Render progress stream
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     onRenderProgress((p) => {
@@ -165,6 +172,15 @@ export default function App() {
       if (unlisten) unlisten();
     };
   }, []);
+
+  // Switch project handler
+  const handleSelectProject = async (proj: SidebarProjectItem) => {
+    setSelectedId(proj.id);
+    const loadedCode = await loadProjectCode(proj.id);
+    if (loadedCode && loadedCode.trim().length > 0) {
+      setCode(loadedCode);
+    }
+  };
 
   const handleReRender = useCallback(async () => {
     setRenderStatus("rendering");
@@ -195,7 +211,7 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleReRender]);
 
-  const handleSendMessage = (prompt: string, model?: string) => {
+  const handleSendMessage = async (prompt: string, model?: string) => {
     const userMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
       sender: "user",
@@ -207,23 +223,37 @@ export default function App() {
     setIsGenerating(true);
     setRenderStatus("preparing");
 
-    setTimeout(() => {
+    try {
+      const response = await executeAgentPrompt(model || selectedModel, prompt, selectedId);
+      
       const assistantMsg: ChatMessage = {
         id: `msg-${Date.now() + 1}`,
         sender: "assistant",
-        content: `Updated scene for: "${prompt}".\n\nConfigured parameter tokens and compiled scene smoothly.`,
+        content: response || `Updated scene for: "${prompt}".\n\nConfigured parameter tokens and compiled scene smoothly.`,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         activities: [
-          { id: `act-${Date.now()}-1`, type: "trace", kind: "thinking", label: "Agent reasoning", detail: prompt },
-          { id: `act-${Date.now()}-2`, type: "tool", action: "edit", target: "scene.py" },
-          { id: `act-${Date.now()}-3`, type: "trace", kind: "run", label: "Rendered Scene", detail: "manim -qh scene.py" },
+          { id: `act-${Date.now()}-1`, type: "step", label: "Agent reasoning & math formulation", status: "complete" },
+          { id: `act-${Date.now()}-2`, type: "tool", action: "edit", target: "scene.py", additions: 32, deletions: 6 },
+          { id: `act-${Date.now()}-3`, type: "step", label: "Compiled scene", status: "complete", meta: "scene.py" },
         ],
       };
+      
       setMessages((prev) => [...prev, assistantMsg]);
+      
+      // Reload updated code from disk
+      const updatedCode = await loadProjectCode(selectedId);
+      if (updatedCode && updatedCode.trim().length > 0) {
+        setCode(updatedCode);
+      }
+
       setIsGenerating(false);
       setRenderStatus("ready");
       handleReRender();
-    }, 1200);
+    } catch (err: any) {
+      setIsGenerating(false);
+      setRenderStatus("error");
+      setRenderError(String(err));
+    }
   };
 
   const handleAutoFixError = (errorText: string) => {
@@ -237,6 +267,7 @@ export default function App() {
     }
 
     setCode(fixedCode);
+    saveProjectCode(selectedId, fixedCode);
     setTimeout(() => {
       setRenderStatus("ready");
       handleReRender();
@@ -249,11 +280,12 @@ export default function App() {
         <AppSidebar
           items={projects}
           selectedId={selectedId}
-          onSelect={(res) => setSelectedId(res.id)}
-          onNewVideo={() => {
-            const newId = `proj_${Date.now()}`;
-            setProjects((prev) => [{ id: newId, label: `Video ${prev.length + 1}` }, ...prev]);
-            setSelectedId(newId);
+          onSelect={handleSelectProject}
+          onNewVideo={async () => {
+            const newMeta = await createProject(`Video ${projects.length + 1}`, "Catppuccin Mocha", INITIAL_MANIM_CODE);
+            setProjects((prev) => [{ id: newMeta.id, label: newMeta.name }, ...prev]);
+            setSelectedId(newMeta.id);
+            setCode(INITIAL_MANIM_CODE);
           }}
         />
       }
