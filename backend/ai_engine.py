@@ -150,7 +150,7 @@ def render_manim_code(project_dir: str, code: str) -> tuple[bool, str, str]:
     try:
         proc = subprocess.run(
             cmd,
-            cwd=str(proj_path),
+            cwd=str(proj_path, timeout=60),
             capture_output=True,
             text=True,
             timeout=45

@@ -331,6 +331,22 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
             self.send_json({"code": code})
             return
 
+        if path == "/api/project_video":
+            qs = urllib.parse.parse_qs(parsed.query)
+            proj_id = qs.get("project_id", [""])[0]
+            proj_dir = get_projects_dir() / proj_id
+            media_dir = proj_dir / "media"
+            if media_dir.exists():
+                mp4_files = list(media_dir.glob("**/*.mp4"))
+                if mp4_files:
+                    latest_mp4 = max(mp4_files, key=lambda f: f.stat().st_mtime)
+                    rel = latest_mp4.relative_to(proj_dir).as_posix()
+                    url = f"http://127.0.0.1:{PORT}/media/{proj_dir.name}/{rel}"
+                    self.send_json({"video_url": url})
+                    return
+            self.send_json({"video_url": None})
+            return
+
         if path == "/api/load_chat":
             qs = urllib.parse.parse_qs(parsed.query)
             proj_id = qs.get("project_id", [""])[0]
@@ -431,7 +447,7 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
                     str(merged_output),
                     "-y"
                 ]
-                subprocess.run(ffmpeg_cmd, cwd=str(proj_dir), capture_output=True)
+                subprocess.run(ffmpeg_cmd, cwd=str(proj_dir), capture_output=True, timeout=60)
                 
                 rel = merged_output.relative_to(proj_dir).as_posix()
                 url = f"http://127.0.0.1:{PORT}/media/{proj_dir.name}/{rel}"

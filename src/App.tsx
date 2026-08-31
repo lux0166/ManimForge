@@ -10,6 +10,7 @@ import {
   fetchEnvironment,
   fetchAvailableAgents,
   fetchProjects,
+  fetchProjectVideo,
   createProject,
   saveProjectCode,
   loadProjectCode,
@@ -108,6 +109,14 @@ export default function App() {
           } else {
             setCode("");
           }
+          const savedVideo = await fetchProjectVideo(firstProj.id);
+          if (savedVideo) {
+            setVideoUrl(savedVideo);
+            setRenderStatus("ready");
+          } else {
+            setVideoUrl(null);
+            setRenderStatus("idle");
+          }
 
           // Load chat
           const chatRaw = await loadProjectChat(firstProj.id);
@@ -139,6 +148,14 @@ export default function App() {
       setCode(loadedCode);
     } else {
       setCode("");
+    }
+    const savedVideo = await fetchProjectVideo(proj.id);
+    if (savedVideo) {
+      setVideoUrl(savedVideo);
+      setRenderStatus("ready");
+    } else {
+      setVideoUrl(null);
+      setRenderStatus("idle");
     }
 
     // Load chat

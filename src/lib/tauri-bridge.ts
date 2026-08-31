@@ -188,7 +188,14 @@ export async function loadProjectChat(projectId: string): Promise<string> {
 }
 
 export async function fetchProjectVideo(projectId: string): Promise<string | null> {
-  return null;
+  try {
+    const res = await fetch(`${SERVER_URL}/api/project_video?project_id=${projectId}`);
+    const data = await res.json();
+    return data.video_url || null;
+  } catch (e) {
+    console.warn("fetchProjectVideo error:", e);
+    return null;
+  }
 }
 
 export async function fetchSceneParameters(code: string): Promise<SceneParameter[]> {
