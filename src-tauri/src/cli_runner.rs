@@ -31,11 +31,12 @@ pub struct ToolMetadata {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AiEngineResult {
+    pub is_code_update: Option<bool>,
     pub success: bool,
-    pub code: String,
+    pub code: Option<String>,
     pub explanation: String,
-    pub video_path: String,
-    pub render_message: String,
+    pub video_path: Option<String>,
+    pub render_message: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -149,19 +150,8 @@ pub async fn run_agent_prompt_stream(
         "agent://stream",
         AgentStreamChunk {
             chunk_type: "thought".to_string(),
-            content: format!("Connecting to {} mathematical intelligence engine...", agent_id),
+            content: format!("Connecting to {} AI assistant...", agent_id),
             tool_meta: None,
-        },
-    );
-
-    let _ = app.emit(
-        "manim://progress",
-        RenderProgress {
-            percent: 20,
-            status_text: "Synthesizing Manim Community v0.21 scene...".to_string(),
-            is_finished: false,
-            error: None,
-            output_path: None,
         },
     );
 
@@ -185,9 +175,12 @@ pub async fn run_agent_prompt_stream(
     let stderr_str = String::from_utf8_lossy(&output.stderr).to_string();
 
     if let Ok(res) = serde_json::from_str::<AiEngineResult>(&stdout_str) {
-        if res.success {
+        let is_code = res.is_code_update.unwrap_or(false);
+
+        if is_code && res.code.is_some() {
+            let code_str = res.code.unwrap();
             let scene_file = project_dir.join("scene.py");
-            std::fs::write(&scene_file, &res.code).ok();
+            std::fs::write(&scene_file, &code_str).ok();
 
             let _ = app.emit(
                 "agent://stream",
@@ -203,6 +196,7 @@ pub async fn run_agent_prompt_stream(
                 },
             );
 
+            let video_path = res.video_path.clone();
             let _ = app.emit(
                 "manim://progress",
                 RenderProgress {
@@ -210,38 +204,35 @@ pub async fn run_agent_prompt_stream(
                     status_text: "Render complete".to_string(),
                     is_finished: true,
                     error: None,
-                    output_path: if res.video_path.is_empty() { None } else { Some(res.video_path.clone()) },
+                    output_path: video_path,
                 },
             );
-
-            let _ = app.emit(
-                "agent://stream",
-                AgentStreamChunk {
-                    chunk_type: "text".to_string(),
-                    content: res.explanation.clone(),
-                    tool_meta: None,
-                },
-            );
-
-            let _ = app.emit(
-                "agent://stream",
-                AgentStreamChunk {
-                    chunk_type: "done".to_string(),
-                    content: "Execution complete".to_string(),
-                    tool_meta: None,
-                },
-            );
-
-            return Ok(res.explanation);
-        } else {
-            return Err(format!("AI Render Error: {}\n{}", res.render_message, stderr_str));
         }
+
+        let _ = app.emit(
+            "agent://stream",
+            AgentStreamChunk {
+                chunk_type: "text".to_string(),
+                content: res.explanation.clone(),
+                tool_meta: None,
+            },
+        );
+
+        let _ = app.emit(
+            "agent://stream",
+            AgentStreamChunk {
+                chunk_type: "done".to_string(),
+                content: "Execution complete".to_string(),
+                tool_meta: None,
+            },
+        );
+
+        return Ok(res.explanation);
     }
 
     if !stderr_str.is_empty() {
         return Err(format!("Engine error: {}", stderr_str));
     }
 
-    let fallback = format!("Configured scene for: \"{}\". Verified math coordinate system.", clean_prompt);
-    Ok(fallback)
+    Ok(format!("Chào bạn! Tôi là trợ lý ManimForge ({}). Tôi có thể giúp gì cho bạn?", agent_id))
 }
