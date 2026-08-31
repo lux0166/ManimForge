@@ -294,8 +294,20 @@ export default function App() {
             rafPending = true;
             requestAnimationFrame(() => {
               rafPending = false;
-              const codeMatch = latestAccumulated.match(/```python\s*([\s\S]*?)(?:```|$)/);
-              const cleanExplanation = latestAccumulated.replace(/```python[\s\S]*?(?:```|$)/, "").trim();
+              // Extract all python code blocks safely
+              const rawBlocks = latestAccumulated.match(/```python\s*([\s\S]*?)(?:```|$)/g);
+              let targetCode = "";
+              if (rawBlocks && rawBlocks.length > 0) {
+                // Find block with class or from manim or largest
+                for (const raw of rawBlocks) {
+                  const cleaned = raw.replace(/^```python\s*/, "").replace(/```$/, "").trim();
+                  if (cleaned.includes("class ") || cleaned.includes("from manim") || cleaned.length > targetCode.length) {
+                    targetCode = cleaned;
+                  }
+                }
+              }
+
+              const cleanExplanation = latestAccumulated.replace(/```python[\s\S]*?(?:```|$)/g, "").trim();
 
               setMessages((prev) =>
                 prev.map((m) =>
@@ -305,8 +317,8 @@ export default function App() {
                 )
               );
 
-              if (codeMatch && codeMatch[1]) {
-                setCode(codeMatch[1]);
+              if (targetCode) {
+                setCode(targetCode);
               }
             });
           }

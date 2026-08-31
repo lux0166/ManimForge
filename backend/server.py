@@ -177,6 +177,19 @@ def resolve_model(agent_id: str, prompt: str) -> tuple[str, str]:
     target_model = AGENT_MODEL_MAP.get(agent_id.lower(), "deepseek/deepseek-chat")
     return target_model, prompt
 
+def extract_scene_code(text: str) -> tuple[str | None, str]:
+    blocks = re.findall(r"```python\s*([\s\S]*?)\s*```", text)
+    if not blocks:
+        match = re.search(r"```python\s*([\s\S]*?)$", text)
+        if match and ("class " in match.group(1) or "from manim" in match.group(1)):
+            return match.group(1).strip(), text
+        return None, text.strip()
+    
+    scene_blocks = [b for b in blocks if "class " in b or "from manim" in b]
+    main_block = scene_blocks[-1] if scene_blocks else max(blocks, key=len)
+    explanation = re.sub(r"```python[\s\S]*?```", "", text).strip()
+    return main_block.strip(), explanation
+
 def get_system_unicode_font() -> str:
     if sys.platform == "win32":
         return "Segoe UI"
@@ -456,11 +469,9 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
                             except:
                                 pass
 
-                # Stream completed, parse code
-                code_match = re.search(r"```python\s*([\s\S]*?)\s*```", accumulated_text)
-                if code_match:
-                    code = code_match.group(1).strip()
-                    explanation = re.sub(r"```python[\s\S]*?```", "", accumulated_text).strip()
+                # Stream completed, parse code safely
+                code, explanation = extract_scene_code(accumulated_text)
+                if code:
                     
                     # Notify UI that rendering has started
                     render_start_payload = json.dumps({"type": "render_start", "code": code})
