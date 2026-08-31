@@ -292,9 +292,11 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
                     })
             projects.sort(key=lambda x: x["id"])
             if not projects:
-                p1 = proj_dir / "proj_1"
+                
                 p1.mkdir(parents=True, exist_ok=True)
-                projects = [{"id": "proj_1", "name": "Video 1", "created_at": "0", "active_theme": "Catppuccin Mocha"}]
+                initial_id = f"proj_{int(time.time()*1000)}"
+                (proj_dir / initial_id).mkdir(parents=True, exist_ok=True)
+                projects = [{"id": initial_id, "name": "Video 1", "created_at": str(time.time()), "active_theme": "Catppuccin Mocha"}]
             self.send_json(projects)
             return
 
@@ -324,7 +326,7 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
 
         if path == "/api/load_code":
             qs = urllib.parse.parse_qs(parsed.query)
-            proj_id = qs.get("project_id", ["proj_1"])[0]
+            proj_id = qs.get("project_id", [""])[0]
             proj_dir = get_projects_dir() / proj_id
             scene_file = proj_dir / "scene.py"
             code = scene_file.read_text(encoding="utf-8") if scene_file.exists() else ""
@@ -333,7 +335,7 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
 
         if path == "/api/load_chat":
             qs = urllib.parse.parse_qs(parsed.query)
-            proj_id = qs.get("project_id", ["proj_1"])[0]
+            proj_id = qs.get("project_id", [""])[0]
             proj_dir = get_projects_dir() / proj_id
             chat_file = proj_dir / "chat.json"
             chat_data = chat_file.read_text(encoding="utf-8") if chat_file.exists() else "[]"
@@ -352,7 +354,7 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
         if path == "/api/chat":
             prompt = data.get("prompt", "")
             agent_id = data.get("model", "agy")
-            proj_id = data.get("project_id", "proj_1")
+            proj_id = data.get("project_id", "")
             current_code = data.get("current_code", "")
 
             proj_dir = get_projects_dir() / proj_id
@@ -380,7 +382,7 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/export":
-            proj_id = data.get("project_id", "proj_1")
+            proj_id = data.get("project_id", "")
             quality = data.get("quality", "1080p")
             code = data.get("code", "")
             proj_dir = get_projects_dir() / proj_id
@@ -473,7 +475,7 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/render":
-            proj_id = data.get("project_id", "proj_1")
+            proj_id = data.get("project_id", "")
             code = data.get("code", "")
             proj_dir = get_projects_dir() / proj_id
             success, video_url, msg = render_scene(proj_dir, code)
@@ -486,7 +488,7 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/save_code":
-            proj_id = data.get("project_id", "proj_1")
+            proj_id = data.get("project_id", "")
             code = data.get("code", "")
             proj_dir = get_projects_dir() / proj_id
             proj_dir.mkdir(parents=True, exist_ok=True)
@@ -495,7 +497,7 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/save_chat":
-            proj_id = data.get("project_id", "proj_1")
+            proj_id = data.get("project_id", "")
             chat = data.get("chat", [])
             proj_dir = get_projects_dir() / proj_id
             proj_dir.mkdir(parents=True, exist_ok=True)

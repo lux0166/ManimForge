@@ -112,7 +112,8 @@ export async function fetchProjects(): Promise<ProjectMetadata[]> {
   } catch (e) {
     console.warn("fetchProjects fallback:", e);
   }
-  return [{ id: "proj_1", name: "Video 1", created_at: new Date().toISOString(), active_theme: "Catppuccin Mocha" }];
+  const fallbackId = `proj_${Date.now()}`;
+  return [{ id: fallbackId, name: "Video 1", created_at: new Date().toISOString(), active_theme: "Catppuccin Mocha" }];
 }
 
 export async function exportMasterVideo(projectId: string, quality: string, code: string): Promise<{ success: boolean; video_url?: string; filename?: string; message?: string }> {

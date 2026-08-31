@@ -33,10 +33,8 @@ const INITIAL_WELCOME_MSG: ChatMessage = {
 };
 
 export default function App() {
-  const [projects, setProjects] = useState<SidebarProjectItem[]>([
-    { id: "proj_1", label: "Video 1" },
-  ]);
-  const [selectedId, setSelectedId] = useState<string>("proj_1");
+  const [projects, setProjects] = useState<SidebarProjectItem[]>([]);
+  const [selectedId, setSelectedId] = useState<string>("");
   // Default to empty code for clean slate
   const [code, setCode] = useState<string>("");
   const [renderStatus, setRenderStatus] = useState<"idle" | "preparing" | "rendering" | "ready" | "error">("idle");
@@ -403,7 +401,8 @@ export default function App() {
               a.click();
               document.body.removeChild(a);
             } else {
-              alert(res.message || "Export failed. Check scene code for errors.");
+              setRenderError(res.message || "Export failed. Check scene code for errors.");
+              setRenderStatus("error");
             }
           }}
         />

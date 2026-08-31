@@ -58,7 +58,7 @@ pub fn list_all_projects() -> Vec<ProjectMetadata> {
 
     if list.is_empty() {
         if let Ok(default_proj) = create_new_project(
-            "Neural Network Learning",
+            "Video 1",
             "Catppuccin Mocha",
             "from manim import *\n\nclass Scene(Scene):\n    def construct(self):\n        self.camera.background_color = \"#11111b\"\n        title = Text(\"Neural Network Optimization\", font_size=28, color=\"#cdd6f4\").to_edge(UP, buff=0.6)\n        self.play(Write(title), run_time=1)\n        self.wait(1)\n",
         ) {
