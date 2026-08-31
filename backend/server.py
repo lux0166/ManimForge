@@ -184,6 +184,41 @@ def patch_vietnamese_fonts(code: str) -> str:
         return inner
     return re.sub(r'Text\([^)]+\)', repl, code)
 
+def get_or_create_project_meta(proj_dir: Path) -> dict:
+    meta_file = proj_dir / "project.json"
+    if meta_file.exists():
+        try:
+            return json.loads(meta_file.read_text(encoding="utf-8"))
+        except:
+            pass
+    
+    # Auto-migration from chat.json or folder name
+    created_at = str(proj_dir.stat().st_ctime)
+    label = proj_dir.name
+    chat_file = proj_dir / "chat.json"
+    if chat_file.exists():
+        try:
+            chat_data = json.loads(chat_file.read_text(encoding="utf-8"))
+            if isinstance(chat_data, list) and len(chat_data) > 0:
+                first_msg = chat_data[0].get("content", "")
+                match = re.search(r"🎬\s*\*\*([^\*]+)\*\*", first_msg)
+                if match:
+                    label = match.group(1).strip()
+        except:
+            pass
+    
+    meta = {
+        "id": proj_dir.name,
+        "name": label,
+        "createdAt": created_at,
+        "updatedAt": str(time.time()),
+        "activeTheme": "Catppuccin Mocha",
+        "isPinned": False,
+        "tags": []
+    }
+    meta_file.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+    return meta
+
 def render_scene(proj_dir: Path, code: str) -> tuple[bool, str, str]:
     proj_dir.mkdir(parents=True, exist_ok=True)
     code = patch_vietnamese_fonts(code)
@@ -232,7 +267,7 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
     def end_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Cache-Control")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Cache-Control, X-API-Key, X-Custom-Endpoint")
         super().end_headers()
 
     def do_OPTIONS(self):
@@ -252,30 +287,30 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
             projects = []
             for item in proj_dir.iterdir():
                 if item.is_dir():
-                    created_at = item.stat().st_ctime
-                    label = item.name
-                    chat_file = item / "chat.json"
-                    if chat_file.exists():
-                        try:
-                            chat_data = json.loads(chat_file.read_text(encoding="utf-8"))
-                            if isinstance(chat_data, list) and len(chat_data) > 0:
-                                first_msg = chat_data[0].get("content", "")
-                                match = re.search(r"🎬\s*\*\*([^\*]+)\*\*", first_msg)
-                                if match:
-                                    label = match.group(1).strip()
-                        except:
-                            pass
+                    meta = get_or_create_project_meta(item)
                     projects.append({
-                        "id": item.name,
-                        "name": label,
-                        "created_at": str(created_at),
-                        "active_theme": "Catppuccin Mocha"
+                        "id": meta.get("id", item.name),
+                        "name": meta.get("name", item.name),
+                        "created_at": meta.get("createdAt", str(item.stat().st_ctime)),
+                        "active_theme": meta.get("activeTheme", "Catppuccin Mocha"),
+                        "is_pinned": meta.get("isPinned", False),
+                        "tags": meta.get("tags", [])
                     })
-            projects.sort(key=lambda x: x["id"])
+            # Pinned items first, then by ID
+            projects.sort(key=lambda x: (not x.get("is_pinned", False), x["id"]))
             if not projects:
                 initial_id = f"proj_{int(time.time()*1000)}"
-                (proj_dir / initial_id).mkdir(parents=True, exist_ok=True)
-                projects = [{"id": initial_id, "name": "Video 1", "created_at": str(time.time()), "active_theme": "Catppuccin Mocha"}]
+                new_p = proj_dir / initial_id
+                new_p.mkdir(parents=True, exist_ok=True)
+                meta = get_or_create_project_meta(new_p)
+                projects = [{
+                    "id": initial_id,
+                    "name": "Video 1",
+                    "created_at": str(time.time()),
+                    "active_theme": "Catppuccin Mocha",
+                    "is_pinned": False,
+                    "tags": []
+                }]
             self.send_json(projects)
             return
 
@@ -351,10 +386,14 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
             agent_id = data.get("model", "agy")
             proj_id = data.get("project_id", "")
             current_code = data.get("current_code", "")
+            custom_api_key = data.get("api_key") or self.headers.get("X-API-Key", "")
+            custom_endpoint = data.get("endpoint") or self.headers.get("X-Custom-Endpoint", "")
 
             proj_dir = get_projects_dir() / proj_id
 
-            api_key = os.environ.get("OPENROUTER_API_KEY", "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")
+            api_key = custom_api_key or os.environ.get("OPENROUTER_API_KEY", "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")
+            endpoint_url = custom_endpoint or "https://openrouter.ai/api/v1/chat/completions"
+
             model_name, clean_prompt = resolve_model(agent_id, prompt)
 
             user_msg = f"User: {clean_prompt}\n\n[Current scene.py code:\n```python\n{current_code}\n```]" if current_code and len(current_code.strip()) > 0 else f"User: {clean_prompt}"
@@ -370,7 +409,7 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
             }
 
             req = urllib.request.Request(
-                "https://openrouter.ai/api/v1/chat/completions",
+                endpoint_url,
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
@@ -454,10 +493,14 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
             agent_id = data.get("model", "agy")
             proj_id = data.get("project_id", "")
             current_code = data.get("current_code", "")
+            custom_api_key = data.get("api_key") or self.headers.get("X-API-Key", "")
+            custom_endpoint = data.get("endpoint") or self.headers.get("X-Custom-Endpoint", "")
 
             proj_dir = get_projects_dir() / proj_id
 
-            api_key = os.environ.get("OPENROUTER_API_KEY", "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")
+            api_key = custom_api_key or os.environ.get("OPENROUTER_API_KEY", "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")
+            endpoint_url = custom_endpoint or "https://openrouter.ai/api/v1/chat/completions"
+
             model_name, clean_prompt = resolve_model(agent_id, prompt)
 
             user_msg = f"User: {clean_prompt}\n\n[Current scene.py code:\n```python\n{current_code}\n```]" if current_code and len(current_code.strip()) > 0 else f"User: {clean_prompt}"
@@ -472,7 +515,7 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
             }
 
             req = urllib.request.Request(
-                "https://openrouter.ai/api/v1/chat/completions",
+                endpoint_url,
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
@@ -640,25 +683,26 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
             if proj_id:
                 proj_dir = get_projects_dir() / proj_id
                 if proj_dir.exists():
-                    chat_file = proj_dir / "chat.json"
-                    chat_data = []
-                    if chat_file.exists():
-                        try:
-                            chat_data = json.loads(chat_file.read_text(encoding="utf-8"))
-                        except:
-                            chat_data = []
-                    new_welcome = {
-                        "id": "msg-welcome",
-                        "sender": "assistant",
-                        "content": f"🎬 **{new_name}** created!\n\nDescribe the mathematical scene or animation you want to create below.",
-                        "timestamp": "00:00"
-                    }
-                    if chat_data:
-                        chat_data[0] = new_welcome
-                    else:
-                        chat_data = [new_welcome]
-                    chat_file.write_text(json.dumps(chat_data, indent=2, ensure_ascii=False), encoding="utf-8")
+                    meta = get_or_create_project_meta(proj_dir)
+                    meta["name"] = new_name
+                    meta["updatedAt"] = str(time.time())
+                    (proj_dir / "project.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
                     self.send_json({"status": "renamed", "project_id": proj_id, "name": new_name})
+                    return
+            self.send_json({"status": "error", "message": "Project not found"})
+            return
+
+        if path == "/api/pin_project":
+            proj_id = data.get("project_id", "")
+            is_pinned = data.get("is_pinned", False)
+            if proj_id:
+                proj_dir = get_projects_dir() / proj_id
+                if proj_dir.exists():
+                    meta = get_or_create_project_meta(proj_dir)
+                    meta["isPinned"] = bool(is_pinned)
+                    meta["updatedAt"] = str(time.time())
+                    (proj_dir / "project.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+                    self.send_json({"status": "pinned", "project_id": proj_id, "is_pinned": is_pinned})
                     return
             self.send_json({"status": "error", "message": "Project not found"})
             return
@@ -671,6 +715,11 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
                     new_id = f"proj_{int(time.time()*1000)}"
                     new_dir = get_projects_dir() / new_id
                     shutil.copytree(proj_dir, new_dir)
+                    meta = get_or_create_project_meta(new_dir)
+                    meta["id"] = new_id
+                    meta["name"] = f"{meta.get('name', 'Video')} (Copy)"
+                    meta["createdAt"] = str(time.time())
+                    (new_dir / "project.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
                     self.send_json({"status": "duplicated", "new_project_id": new_id})
                     return
             self.send_json({"status": "error", "message": "Project not found"})

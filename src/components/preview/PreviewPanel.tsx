@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   Video,
   Terminal,
+  AlertCircle,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/motion/tabs";
 import { KeyframeTimeline } from "@/components/preview/KeyframeTimeline";
@@ -31,6 +32,8 @@ export interface PreviewPanelProps {
   status: "idle" | "preparing" | "rendering" | "ready" | "error";
   progress?: number;
   renderLog?: string;
+  renderError?: string | null;
+  onAutoFix?: (errorText: string) => void;
   onReRender?: () => void;
   onExportMaster?: (format: "mp4" | "gif" | "zip", quality: string) => Promise<void>;
   className?: string;
@@ -42,6 +45,8 @@ export function PreviewPanel({
   status = "idle",
   progress = 0,
   renderLog,
+  renderError,
+  onAutoFix,
   onReRender,
   onExportMaster,
   className,
@@ -176,6 +181,28 @@ export function PreviewPanel({
 
         {/* Tab 1: Video Canvas */}
         <TabsContent value="preview" className="relative flex flex-1 flex-col items-center justify-center p-3 overflow-hidden m-0 bg-black">
+                    {/* Interactive 1-Click Auto-Fix AI Error Banner */}
+          {renderError && (
+            <div className="absolute top-3 inset-x-3 z-40 flex items-center justify-between gap-3 rounded-lg border border-red-500/40 bg-red-950/85 px-3 py-2 text-xs text-red-200 backdrop-blur-md shadow-xl animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center gap-2 overflow-hidden">
+                <AlertCircle className="size-4 shrink-0 text-red-400" />
+                <span className="truncate font-mono text-[11px] text-red-200">
+                  {renderError.slice(0, 100)}
+                </span>
+              </div>
+              {onAutoFix && (
+                <button
+                  type="button"
+                  onClick={() => onAutoFix(renderError)}
+                  className="flex shrink-0 items-center gap-1.5 rounded-md bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-500 transition-all shadow-md active:scale-95"
+                >
+                  <Sparkles className="size-3.5" />
+                  <span>⚡ Auto-Fix with AI</span>
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Subtle Live Compiling Overlay Badge without blocking the screen */}
           {(status === "preparing" || status === "rendering") && (
             <div className="absolute top-4 right-4 z-30 flex items-center gap-2 rounded-full bg-[#121214]/90 border border-white/20 px-3 py-1 text-xs text-white backdrop-blur-md shadow-lg animate-pulse">

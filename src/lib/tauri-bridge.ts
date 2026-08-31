@@ -31,6 +31,8 @@ export interface ProjectMetadata {
   active_theme: string;
   prompt?: string | null;
   last_rendered_video?: string | null;
+  is_pinned?: boolean;
+  tags?: string[];
 }
 
 export interface RenderProgress {
@@ -243,6 +245,17 @@ export async function executeAgentPrompt(
   currentCode: string = ""
 ): Promise<AiChatResult> {
   try {
+    let customApiKey = "";
+    let customEndpoint = "";
+    try {
+      const raw = localStorage.getItem("manimforge_settings");
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s.apiKey) customApiKey = s.apiKey;
+        if (s.customEndpoint) customEndpoint = s.customEndpoint;
+      }
+    } catch {}
+
     const res = await fetch(`${SERVER_URL}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -251,6 +264,8 @@ export async function executeAgentPrompt(
         model: agentId,
         project_id: projectId,
         current_code: currentCode,
+        api_key: customApiKey,
+        endpoint: customEndpoint,
       }),
     });
     const data: AiChatResult = await res.json();
@@ -341,6 +356,16 @@ export async function streamAgentPrompt(
   }
 ): Promise<void> {
   try {
+    let customApiKey = "";
+    let customEndpoint = "";
+    try {
+      const raw = localStorage.getItem("manimforge_settings");
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s.apiKey) customApiKey = s.apiKey;
+        if (s.customEndpoint) customEndpoint = s.customEndpoint;
+      }
+    } catch {}
     const res = await fetch(`${SERVER_URL}/api/chat_stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -349,6 +374,8 @@ export async function streamAgentPrompt(
         model: agentId,
         project_id: projectId,
         current_code: currentCode,
+        api_key: customApiKey,
+        endpoint: customEndpoint,
       }),
     });
 
@@ -396,5 +423,14 @@ export async function streamAgentPrompt(
   } catch (err: any) {
     console.error("streamAgentPrompt error:", err);
     callbacks.onError(String(err));
+  }
+}
+
+export async function checkServerHealth(): Promise<boolean> {
+  try {
+    const res = await fetch(`${SERVER_URL}/api/health`, { signal: AbortSignal.timeout(3000) });
+    return res.ok;
+  } catch {
+    return false;
   }
 }

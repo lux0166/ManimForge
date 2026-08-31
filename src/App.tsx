@@ -19,6 +19,7 @@ import {
   renderManimScene,
   executeAgentPrompt,
   streamAgentPrompt,
+  checkServerHealth,
   exportMasterVideo,
   deleteProject,
   renameProject,
@@ -46,6 +47,9 @@ export default function App() {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [selectedModel, setSelectedModel] = useState<string>("agy");
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isServerOnline, setIsServerOnline] = useState(true);
+  const [isCheckingServer, setIsCheckingServer] = useState(false);
   const [availableAgents, setAvailableAgents] = useState<AgentCliInfo[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_WELCOME_MSG]);
 
@@ -439,6 +443,7 @@ export default function App() {
           status={renderStatus}
           progress={renderProgress}
           renderLog={renderLog}
+              renderError={renderError}
           onReRender={handleReRender}
           onExportMaster={async (fmt, q) => {
             setRenderLog(`Exporting high-resolution ${q} ${fmt.toUpperCase()} video...`);
