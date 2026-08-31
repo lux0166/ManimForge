@@ -27,7 +27,13 @@
       "csp": null,
       "capabilities": [
         "default"
-      ]
+      ],
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "**"
+        ]
+      }
     }
   },
   "bundle": {

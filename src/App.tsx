@@ -164,7 +164,9 @@ export default function App() {
         } else {
           setRenderStatus("ready");
           setRenderError(null);
-          if (p.output_path) setVideoUrl(p.output_path);
+          if (p.output_path) {
+            setVideoUrl(p.output_path);
+          }
         }
       }
     }).then((fn) => {
@@ -194,7 +196,9 @@ export default function App() {
     try {
       await saveProjectCode(selectedId, code);
       const url = await renderManimScene(selectedId, "scene.py", "qh");
-      setVideoUrl(url);
+      if (url) {
+        setVideoUrl(url);
+      }
       setRenderStatus("ready");
     } catch (err: any) {
       setRenderLog(String(err));
@@ -226,24 +230,33 @@ export default function App() {
     const streamingAssistantMsg: ChatMessage = {
       id: assistantMsgId,
       sender: "assistant",
-      content: "Thinking...",
+      content: "Reasoning and generating mathematical animation...",
       isStreaming: true,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       activities: [
-        { id: `act-${Date.now()}-1`, type: "step", label: `Invoking ${model || selectedModel} CLI agent...`, status: "active" },
-        { id: `act-${Date.now()}-2`, type: "step", label: "Formulating math coordinates & scene parameters", status: "pending" },
+        { id: `act-${Date.now()}-1`, type: "step", label: `Invoking ${model || selectedModel} AI Engine...`, status: "active" },
+        { id: `act-${Date.now()}-2`, type: "step", label: "Formulating Manim Community v0.21 geometry", status: "pending" },
+        { id: `act-${Date.now()}-3`, type: "step", label: "Compiling 60fps scene video", status: "pending" },
       ],
     };
 
     setMessages((prev) => [...prev, userMsg, streamingAssistantMsg]);
     setIsGenerating(true);
-    setRenderStatus("preparing");
+    setRenderStatus("rendering");
+    setRenderProgress(25);
+    setRenderLog(`AI Agent synthesizing: "${prompt}"...`);
 
     try {
       const response = await executeAgentPrompt(model || selectedModel, prompt, selectedId);
       
       const cleanPrompt = prompt.replace("[PLAN MODE]", "").trim();
       const finalReply = response || `Configured and updated scene for: "${cleanPrompt}".\n\nSynchronized mathematical parameters and compiled scene smoothly.`;
+
+      // Reload updated code from disk
+      const updatedCode = await loadProjectCode(selectedId);
+      if (updatedCode && updatedCode.trim().length > 0) {
+        setCode(updatedCode);
+      }
 
       setMessages((prev) =>
         prev.map((m) =>
@@ -261,16 +274,11 @@ export default function App() {
             : m
         )
       );
-      
-      // Reload updated code from disk
-      const updatedCode = await loadProjectCode(selectedId);
-      if (updatedCode && updatedCode.trim().length > 0) {
-        setCode(updatedCode);
-      }
 
       setIsGenerating(false);
       setRenderStatus("ready");
-      handleReRender();
+      setRenderProgress(100);
+      setRenderLog("Scene ready");
     } catch (err: any) {
       setIsGenerating(false);
       setRenderStatus("error");

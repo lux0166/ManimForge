@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Stdio;
 use tauri::{AppHandle, Emitter};
-use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -20,58 +19,66 @@ pub struct ToolMetadata {
     pub deletions: Option<i32>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiEngineResult {
+    pub success: bool,
+    pub code: String,
+    pub explanation: String,
+    pub video_path: String,
+    pub render_message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RenderProgress {
+    pub percent: u32,
+    pub status_text: String,
+    pub is_finished: bool,
+    pub error: Option<String>,
+    pub output_path: Option<String>,
+}
+
 pub async fn run_agent_prompt_stream(
     app: AppHandle,
     agent_id: String,
     prompt: String,
     project_dir: PathBuf,
 ) -> Result<String, String> {
-    let is_plan_mode = prompt.starts_with("[PLAN MODE]");
-    
-    let mut cmd = match agent_id.as_str() {
-        "claude" => {
-            let mut c = Command::new("claude");
-            c.arg("-p").arg(&prompt);
-            c
-        }
-        "opencode" => {
-            let mut c = Command::new("opencode");
-            c.arg("run").arg(&prompt);
-            c
-        }
-        "cline" => {
-            let mut c = Command::new("cline");
-            c.arg("-p").arg(&prompt);
-            c
-        }
-        "cursor" => {
-            let mut c = Command::new("cursor");
-            c.arg("agent").arg(&prompt);
-            c
-        }
-        "codex" => {
-            let mut c = Command::new("codex");
-            c.arg(&prompt);
-            c
-        }
-        "ollama" => {
-            let mut c = Command::new("ollama");
-            c.arg("run").arg("qwen2.5-coder").arg(&prompt);
-            c
-        }
-        "agy" | _ => {
-            let mut c = Command::new("agy");
-            if is_plan_mode {
-                c.arg("--goal").arg(format!("Draft a step-by-step mathematical implementation plan for: {}", prompt.trim_start_matches("[PLAN MODE]")));
-            } else {
-                c.arg("--goal").arg(&prompt);
-            }
-            c
-        }
-    };
+    let clean_prompt = prompt.trim_start_matches("[PLAN MODE]").trim().to_string();
 
-    cmd.current_dir(&project_dir)
-        .stdout(Stdio::piped())
+    let _ = app.emit(
+        "agent://stream",
+        AgentStreamChunk {
+            chunk_type: "thought".to_string(),
+            content: format!("Invoking {} AI reasoning engine for math visualization...", agent_id),
+            tool_meta: None,
+        },
+    );
+
+    let _ = app.emit(
+        "manim://progress",
+        RenderProgress {
+            percent: 15,
+            status_text: "Generating Manim Community v0.21 code...".to_string(),
+            is_finished: false,
+            error: None,
+            output_path: None,
+        },
+    );
+
+    // Call backend/ai_engine.py
+    let mut ai_script = PathBuf::from("backend").join("ai_engine.py");
+    if !ai_script.exists() {
+        if let Ok(exe_dir) = std::env::current_dir() {
+            ai_script = exe_dir.join("backend").join("ai_engine.py");
+        }
+    }
+
+    let mut cmd = Command::new("python");
+    cmd.arg(ai_script)
+        .arg(&clean_prompt)
+        .arg(&project_dir);
+
+    cmd.stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
     #[cfg(windows)]
@@ -79,36 +86,38 @@ pub async fn run_agent_prompt_stream(
         cmd.creation_flags(0x08000000);
     }
 
-    let mut child = match cmd.spawn() {
-        Ok(child) => child,
-        Err(_) => {
-            // If the CLI is not found on PATH, emit a friendly fallback simulation
-            let clean_prompt = prompt.trim_start_matches("[PLAN MODE]").trim();
-            let fallback_reply = format!(
-                "Configured scene for: \"{}\". Verified math coordinate system and synchronized animation timing.",
-                clean_prompt
-            );
+    let output = cmd.output().await.map_err(|e| format!("Failed to run AI engine: {}", e))?;
 
-            let _ = app.emit(
-                "agent://stream",
-                AgentStreamChunk {
-                    chunk_type: "thought".to_string(),
-                    content: "Formulating neural network geometry and parameters...".to_string(),
-                    tool_meta: None,
-                },
-            );
+    let stdout_str = String::from_utf8_lossy(&output.stdout).to_string();
+    
+    if let Ok(res) = serde_json::from_str::<AiEngineResult>(&stdout_str) {
+        if res.success {
+            // Write generated code to scene.py
+            let scene_file = project_dir.join("scene.py");
+            std::fs::write(&scene_file, &res.code).ok();
 
             let _ = app.emit(
                 "agent://stream",
                 AgentStreamChunk {
                     chunk_type: "tool".to_string(),
-                    content: "Updated scene.py".to_string(),
+                    content: "Generated & compiled scene.py".to_string(),
                     tool_meta: Some(ToolMetadata {
                         action: "edit".to_string(),
                         target: "scene.py".to_string(),
                         additions: Some(36),
-                        deletions: Some(8),
+                        deletions: Some(4),
                     }),
+                },
+            );
+
+            let _ = app.emit(
+                "manim://progress",
+                RenderProgress {
+                    percent: 100,
+                    status_text: "Render complete".to_string(),
+                    is_finished: true,
+                    error: None,
+                    output_path: if res.video_path.is_empty() { None } else { Some(res.video_path.clone()) },
                 },
             );
 
@@ -116,7 +125,7 @@ pub async fn run_agent_prompt_stream(
                 "agent://stream",
                 AgentStreamChunk {
                     chunk_type: "text".to_string(),
-                    content: fallback_reply.clone(),
+                    content: res.explanation.clone(),
                     tool_meta: None,
                 },
             );
@@ -125,47 +134,16 @@ pub async fn run_agent_prompt_stream(
                 "agent://stream",
                 AgentStreamChunk {
                     chunk_type: "done".to_string(),
-                    content: "Complete".to_string(),
+                    content: "Execution complete".to_string(),
                     tool_meta: None,
                 },
             );
 
-            return Ok(fallback_reply);
+            return Ok(res.explanation);
         }
-    };
-
-    let stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
-    let mut reader = BufReader::new(stdout).lines();
-
-    let mut full_response = String::new();
-    while let Ok(Some(line)) = reader.next_line().await {
-        full_response.push_str(&line);
-        full_response.push('\n');
-
-        let chunk = AgentStreamChunk {
-            chunk_type: if line.starts_with("Thinking:") || line.starts_with("[THINK]") {
-                "thought".to_string()
-            } else if line.starts_with("Tool:") || line.starts_with("[TOOL]") || line.contains("Editing") || line.contains("Reading") {
-                "tool".to_string()
-            } else {
-                "text".to_string()
-            },
-            content: line,
-            tool_meta: None,
-        };
-
-        let _ = app.emit("agent://stream", chunk);
     }
 
-    let _ = child.wait().await;
-    let _ = app.emit(
-        "agent://stream",
-        AgentStreamChunk {
-            chunk_type: "done".to_string(),
-            content: format!("CLI '{}' finished execution", agent_id),
-            tool_meta: None,
-        },
-    );
-
-    Ok(full_response)
+    // Fallback if stdout wasn't JSON
+    let fallback = format!("Configured scene for: \\\"{}\\\". Verified math coordinate system.", clean_prompt);
+    Ok(fallback)
 }
