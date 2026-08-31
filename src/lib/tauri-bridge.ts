@@ -94,9 +94,29 @@ export async function fetchAvailableAgents(): Promise<AgentCliInfo[]> {
 }
 
 export async function fetchProjects(): Promise<ProjectMetadata[]> {
-  return [
-    { id: "proj_1", name: "Neural Network Learning", created_at: new Date().toISOString(), active_theme: "Catppuccin Mocha" },
-  ];
+  try {
+    const res = await fetch(`${SERVER_URL}/api/projects`);
+    const data = await res.json();
+    if (Array.isArray(data) && data.length > 0) {
+      return data;
+    }
+  } catch (e) {
+    console.warn("fetchProjects fallback:", e);
+  }
+  return [{ id: "proj_1", name: "Video 1", created_at: new Date().toISOString(), active_theme: "Catppuccin Mocha" }];
+}
+
+export async function exportMasterVideo(projectId: string, quality: string, code: string): Promise<{ success: boolean; video_url?: string; filename?: string; message?: string }> {
+  try {
+    const res = await fetch(`${SERVER_URL}/api/export`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project_id: projectId, quality, code }),
+    });
+    return await res.json();
+  } catch (err: any) {
+    return { success: false, message: String(err) };
+  }
 }
 
 export async function createProject(name: string, theme: string, initialCode: string): Promise<ProjectMetadata> {

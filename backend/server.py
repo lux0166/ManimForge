@@ -65,23 +65,20 @@ def call_llm(prompt: str, current_code: str = "") -> tuple[str | None, str]:
             res_data = json.loads(response.read().decode("utf-8"))
             content = res_data["choices"][0]["message"]["content"]
             
-            # Check if there is a python code block
             code_match = re.search(r"```python\s*([\s\S]*?)\s*```", content)
             if code_match:
                 code = code_match.group(1).strip()
                 explanation = re.sub(r"```python[\s\S]*?```", "", content).strip()
                 return code, explanation
             else:
-                # Pure conversational response
                 return None, content.strip()
     except Exception as e:
         print(f"LLM API Error: {e}", file=sys.stderr)
         p = prompt.lower()
         if any(w in p for w in ["vẽ", "tạo", "mô phỏng", "đồ thị", "draw", "animate", "create", "plot", "sin", "cos", "wave"]):
-            fallback_code = generate_fallback_scene(prompt)
-            return fallback_code, f"Đã khởi tạo hoạt cảnh toán học cho: '{prompt}'."
+            return generate_fallback_scene(prompt), f"Đã khởi tạo hoạt cảnh toán học cho: '{prompt}'."
         else:
-            return None, f"Chào bạn! Tôi là trợ lý ManimForge. Bạn có thể yêu cầu tôi mô phỏng hoặc vẽ bất kỳ hoạt cảnh toán học/vật lý nào bằng Manim Community v0.21."
+            return None, "Chào bạn! Tôi là trợ lý ManimForge. Bạn có thể yêu cầu tôi mô phỏng hoặc vẽ bất kỳ hoạt cảnh toán học/vật lý nào bằng Manim Community v0.21."
 
 def generate_fallback_scene(prompt: str) -> str:
     p = prompt.lower()
@@ -196,6 +193,38 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
 
+        if path == "/api/projects":
+            proj_dir = get_projects_dir()
+            projects = []
+            for item in proj_dir.iterdir():
+                if item.is_dir():
+                    created_at = item.stat().st_ctime
+                    label = item.name
+                    chat_file = item / "chat.json"
+                    if chat_file.exists():
+                        try:
+                            chat_data = json.loads(chat_file.read_text(encoding="utf-8"))
+                            if isinstance(chat_data, list) and len(chat_data) > 0:
+                                first_msg = chat_data[0].get("content", "")
+                                match = re.search(r"🎬\s*\*\*([^\*]+)\*\*", first_msg)
+                                if match:
+                                    label = match.group(1).strip()
+                        except:
+                            pass
+                    projects.append({
+                        "id": item.name,
+                        "name": label,
+                        "created_at": str(created_at),
+                        "active_theme": "Catppuccin Mocha"
+                    })
+            projects.sort(key=lambda x: x["id"])
+            if not projects:
+                p1 = proj_dir / "proj_1"
+                p1.mkdir(parents=True, exist_ok=True)
+                projects = [{"id": "proj_1", "name": "Video 1", "created_at": "0", "active_theme": "Catppuccin Mocha"}]
+            self.send_json(projects)
+            return
+
         if path == "/api/health":
             self.send_json({"status": "ok", "manim": "v0.21.0"})
             return
@@ -267,7 +296,6 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
                     "message": msg,
                 })
             else:
-                # Conversational response
                 self.send_json({
                     "is_code_update": False,
                     "success": True,
@@ -276,6 +304,46 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
                     "video_url": None,
                     "message": "Chat response",
                 })
+            return
+
+        if path == "/api/export":
+            proj_id = data.get("project_id", "proj_1")
+            quality = data.get("quality", "1080p")
+            code = data.get("code", "")
+            proj_dir = get_projects_dir() / proj_id
+            
+            q_flag = "-qh" if quality == "1080p" else "-qk" if quality == "4k" else "-qm"
+            scene_file = proj_dir / "scene.py"
+            if code:
+                scene_file.write_text(code, encoding="utf-8")
+            
+            class_match = re.search(r"class\s+([A-Za-z0-9_]+)\s*\(\s*Scene\s*\):", code or (scene_file.read_text(encoding="utf-8") if scene_file.exists() else ""))
+            scene_class = class_match.group(1) if class_match else "Scene"
+            
+            cmd = [
+                sys.executable,
+                "-m",
+                "manim",
+                q_flag,
+                str(scene_file),
+                scene_class,
+                "--media_dir",
+                "media",
+            ]
+            
+            try:
+                proc = subprocess.run(cmd, cwd=str(proj_dir), capture_output=True, text=True, timeout=120)
+                media_dir = proj_dir / "media"
+                mp4_files = list(media_dir.glob("**/*.mp4"))
+                if mp4_files:
+                    latest = max(mp4_files, key=lambda f: f.stat().st_mtime)
+                    rel = latest.relative_to(proj_dir).as_posix()
+                    url = f"http://127.0.0.1:{PORT}/media/{proj_dir.name}/{rel}"
+                    self.send_json({"success": True, "video_url": url, "filename": latest.name})
+                    return
+                self.send_json({"success": False, "message": "Export completed but no video file found"})
+            except Exception as e:
+                self.send_json({"success": False, "message": str(e)})
             return
 
         if path == "/api/render":

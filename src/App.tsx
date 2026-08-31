@@ -17,6 +17,7 @@ import {
   loadProjectChat,
   renderManimScene,
   executeAgentPrompt,
+  exportMasterVideo,
   type AgentCliInfo,
   type AiChatResult,
 } from "@/lib/tauri-bridge";
@@ -312,20 +313,7 @@ export default function App() {
 
   const handleAutoFixError = (errorText: string) => {
     setRenderError(null);
-    setRenderStatus("rendering");
-    setRenderProgress(30);
-
-    let fixedCode = code;
-    if (fixedCode.includes("STROKE_WIDTH") && !fixedCode.includes("STROKE_WIDTH =")) {
-      fixedCode = "STROKE_WIDTH = 2.5\n" + fixedCode;
-    }
-
-    setCode(fixedCode);
-    saveProjectCode(selectedId, fixedCode);
-    setTimeout(() => {
-      setRenderStatus("ready");
-      handleReRender();
-    }, 800);
+    handleSendMessage(`Sửa lỗi biên dịch Manim sau trong code scene.py:\n\`\`\`\n${errorText}\n\`\`\``);
   };
 
   return (
@@ -359,7 +347,18 @@ export default function App() {
           renderLog={renderLog}
           onReRender={handleReRender}
           onExportMaster={async (fmt, q) => {
-            alert(`Exporting ${fmt.toUpperCase()} (${q}) via ManimForge Engine...`);
+            setRenderLog(`Exporting high-resolution ${q} ${fmt.toUpperCase()} video...`);
+            const res = await exportMasterVideo(selectedId, q, code);
+            if (res.success && res.video_url) {
+              const a = document.createElement("a");
+              a.href = res.video_url;
+              a.download = res.filename || `manimforge_${q}.mp4`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+            } else {
+              alert(res.message || "Export failed. Check scene code for errors.");
+            }
           }}
         />
       }
