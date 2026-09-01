@@ -108,7 +108,7 @@ export const SettingsDialog = React.memo(function SettingsDialog({
             <div className="relative">
               <input
                 type={showApiKey ? "text" : "password"}
-                placeholder="sk-or-v1-... (Leave blank for default server key)"
+                placeholder="sk-or-v1-... (Or set OPENROUTER_API_KEY in environment)"
                 value={settings.apiKey}
                 onChange={(e) => setSettings({ ...settings, apiKey: e.target.value })}
                 className="w-full rounded-lg border border-[#27272a] bg-[#18181b] px-3 py-2 text-xs text-white placeholder-zinc-500 focus:border-[#89b4fa] focus:outline-none pr-9 font-mono"

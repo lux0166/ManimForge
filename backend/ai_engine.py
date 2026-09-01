@@ -6,6 +6,25 @@ import urllib.request
 import subprocess
 from pathlib import Path
 
+def load_env_file():
+    for candidate in [Path(__file__).resolve().parent.parent / ".env", Path(__file__).resolve().parent / ".env", Path.cwd() / ".env"]:
+        if candidate.exists():
+            try:
+                with open(candidate, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith("#") and "=" in line:
+                            k, v = line.split("=", 1)
+                            k = k.strip()
+                            v = v.strip().strip("'\"")
+                            if k and k not in os.environ:
+                                os.environ[k] = v
+            except Exception:
+                pass
+            break
+
+load_env_file()
+
 SYSTEM_PROMPT = """You are ManimForge Master Agent, an elite AI Mathematical Animator, Physicist, and Pair Programmer specializing in Manim Community Edition v0.21.
 
 ### CORE OBJECTIVES:
@@ -85,9 +104,9 @@ Every frame must be clean, elegant, with ZERO overlapping text, ZERO colliding a
 """
 
 def call_llm(prompt: str, current_code: str = "") -> tuple[str | None, str]:
-    api_key = os.environ.get("OPENROUTER_API_KEY", "")
+    api_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
     if not api_key:
-        api_key = "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"
+        return None, "Error: OPENROUTER_API_KEY is not configured. Please set the OPENROUTER_API_KEY environment variable or configure it in Settings."
 
     user_msg = f"User: {prompt}\n\n[Current scene.py code:\n```python\n{current_code}\n```]" if current_code and len(current_code.strip()) > 0 else f"User: {prompt}"
 

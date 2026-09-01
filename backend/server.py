@@ -13,6 +13,25 @@ import time
 
 PORT = 8765
 
+def load_env_file():
+    for candidate in [Path(__file__).resolve().parent.parent / ".env", Path(__file__).resolve().parent / ".env", Path.cwd() / ".env"]:
+        if candidate.exists():
+            try:
+                with open(candidate, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith("#") and "=" in line:
+                            k, v = line.split("=", 1)
+                            k = k.strip()
+                            v = v.strip().strip("'\"")
+                            if k and k not in os.environ:
+                                os.environ[k] = v
+            except Exception:
+                pass
+            break
+
+load_env_file()
+
 def get_projects_dir() -> Path:
     home = Path.home()
     p = home / "Documents" / "ManimForge" / "Projects"
@@ -354,7 +373,9 @@ def render_scene(proj_dir: Path, code: str) -> tuple[bool, str, str]:
     return False, "", "\n".join(errors) or "Failed to compile multi-chapter video"
 
 def call_llm(prompt: str, current_code: str = "", agent_id: str = "agy", api_key_override: str = "", endpoint_override: str = "") -> tuple[str | None, str]:
-    api_key = api_key_override or os.environ.get("OPENROUTER_API_KEY", "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")
+    api_key = (api_key_override or os.environ.get("OPENROUTER_API_KEY", "")).strip()
+    if not api_key:
+        return None, "Lỗi: Chưa cấu hình API Key. Vui lòng thiết lập biến môi trường OPENROUTER_API_KEY hoặc nhập API Key trong phần Cài đặt (Settings)."
     endpoint_url = endpoint_override or "https://openrouter.ai/api/v1/chat/completions"
 
     model_name, clean_prompt = resolve_model(agent_id, prompt)
@@ -529,8 +550,19 @@ class ManimForgeHandler(BaseHTTPRequestHandler):
 
             proj_dir = get_projects_dir() / proj_id
 
-            api_key = custom_api_key or os.environ.get("OPENROUTER_API_KEY", "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")
+            api_key = (custom_api_key or os.environ.get("OPENROUTER_API_KEY", "")).strip()
             endpoint_url = custom_endpoint or "https://openrouter.ai/api/v1/chat/completions"
+
+            if not api_key:
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Connection", "keep-alive")
+                self.end_headers()
+                err_msg = "Lỗi: Chưa cấu hình API Key. Vui lòng thiết lập biến môi trường OPENROUTER_API_KEY hoặc nhập API Key trong phần Cài đặt (Settings)."
+                self.wfile.write(f"data: {json.dumps({'type': 'error', 'error': err_msg})}\n\n".encode("utf-8"))
+                self.wfile.flush()
+                return
 
             model_name, clean_prompt = resolve_model(agent_id, prompt)
 
